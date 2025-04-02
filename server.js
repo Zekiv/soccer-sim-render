@@ -34,7 +34,7 @@ const server = http.createServer((req, res) => {
         res.writeHead(404);
         res.end('Not Found');
     }
-});
+}); // End of http.createServer
 
 // --- WebSocket Server Setup ---
 const wss = new WebSocket.Server({ server });
@@ -293,7 +293,7 @@ function updatePlayerAI(player) {
              player.kickCooldown = 35;
         }
         return; // End GK Logic
-    }
+    } // End of GK Logic block
 
 
     // --- OUTFIELD PLAYER LOGIC ---
@@ -366,7 +366,7 @@ function updatePlayerAI(player) {
                         bestScore = score;
                         bestPassTarget = p;
                     }
-                });
+                }); // End of forEach potentialPassTarget
 
                 // Make the pass if a reasonably good option is found
                 if (bestPassTarget && bestScore > -500) { // Adjusted threshold
@@ -377,7 +377,7 @@ function updatePlayerAI(player) {
                     logDebug(`${player.id} passes to ${bestPassTarget.id}. Score: ${bestScore.toFixed(0)}`);
                     return;
                 }
-            }
+            } // End of pass check
 
             // DRIBBLE (Default if no shot or pass)
             player.state = 'DRIBBLING';
@@ -450,8 +450,8 @@ function updatePlayerAI(player) {
 
             movePlayerTowardsTarget(player, PLAYER_SPEED * (player.role === 'FWD' ? 1.0 : 0.9)); // Forwards move slightly faster in support
             return;
-        }
-    }
+        } // End of teammate has ball logic
+    } // End of teamHasPossession block
     else if (opponentHasPossession) { // **B) Opponent Has Possession**
         const chaseRangeFactor = player.role === 'FWD' ? CHASE_RANGE_FACTOR_FWD * 0.8 : (player.role === 'MID' ? CHASE_RANGE_FACTOR_MID * 0.9 : CHASE_RANGE_FACTOR_DEF); // Reduced forward pressing range
         const pressTriggerDistSq = (FIELD_WIDTH * chaseRangeFactor * 0.6)**2; // Distance to actively press ball carrier
@@ -546,8 +546,8 @@ function updatePlayerAI(player) {
             player.targetY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, targetY));
             movePlayerTowardsTarget(player, PLAYER_SPEED * 0.9); // Move slightly slower when positioning
             return;
-        }
-    }
+        } // End of not pressing logic
+    } // End of opponentHasPossession block
     else if (ballIsLoose) { // **C) Ball is Loose**
         // Prioritize players closer to the ball and with better roles for winning it
         const chaseRangeFactor = player.role === 'FWD' ? CHASE_RANGE_FACTOR_FWD * 0.9 : (player.role === 'MID' ? CHASE_RANGE_FACTOR_MID * 1.1 : CHASE_RANGE_FACTOR_DEF * 1.05); // Mids/Defs slightly more eager for loose balls
@@ -584,8 +584,8 @@ function updatePlayerAI(player) {
              player.targetY = player.baseY;
              movePlayerTowardsTarget(player);
              return;
-        }
-    }
+        } // End of loose ball chase range check
+    } // End of ballIsLoose block
 
     // Fallback / Idle state
     if(player.state !== 'PASSING' && player.state !== 'SHOOTING') { // Don't override action states
@@ -594,7 +594,7 @@ function updatePlayerAI(player) {
         player.targetY = player.baseY;
         movePlayerTowardsTarget(player, PLAYER_SPEED * 0.8);
     }
-}
+} // End of updatePlayerAI function
 
 function movePlayerTowardsTarget(player, speed = PLAYER_SPEED) { const dx = player.targetX - player.x; const dy = player.targetY - player.y; const dist = Math.sqrt(dx * dx + dy * dy); if (dist > speed) { const angle = Math.atan2(dy, dx); player.vx = Math.cos(angle) * speed; player.vy = Math.sin(angle) * speed; } else if (dist > 1){ player.vx = dx; player.vy = dy; } else { player.vx = 0; player.vy = 0; } }
 
@@ -641,7 +641,7 @@ function updatePlayerPosition(player) {
             }
         }
     });
-}
+} // End of updatePlayerPosition
 
 // REVISED: passBall (predictive target, power/accuracy logic)
 function passBall(passer, targetPlayer, powerFactor = PASS_POWER_FACTOR) {
@@ -675,7 +675,7 @@ function passBall(passer, targetPlayer, powerFactor = PASS_POWER_FACTOR) {
     ball.ownerId = null; // Ball is now loose
     passer.hasBall = false;
     logDebug(`Pass details - Target: ${targetPlayer.id}, Power: ${power.toFixed(1)}, Angle: ${finalAngle.toFixed(2)}`);
-}
+} // End of passBall
 
 // REVISED: shootBall (accuracy logic)
 function shootBall(shooter, targetX, targetY, power = SHOT_POWER) {
@@ -697,7 +697,7 @@ function shootBall(shooter, targetX, targetY, power = SHOT_POWER) {
     ball.ownerId = null;
     shooter.hasBall = false;
      logDebug(`Shot details - Power: ${finalPower.toFixed(1)}, Angle: ${finalAngle.toFixed(2)}`);
-}
+} // End of shootBall
 
 // REVISED: updateBallPhysics (check possession gain after physics)
 function updateBallPhysics() {
@@ -773,7 +773,7 @@ function updateBallPhysics() {
             gainPossession(closestPlayer);
         }
     }
-}
+} // End of updateBallPhysics
 
 
 // REVISED: gainPossession (more robust state update, prevent GK push)
@@ -816,7 +816,7 @@ function gainPossession(player) {
             }
         }
     }
-}
+} // End of gainPossession
 
 // REVISED: handleGoal (uses correct kicking team logic)
 function handleGoal(scoringTeam) {
@@ -832,9 +832,38 @@ function handleGoal(scoringTeam) {
     broadcast({ type: 'goalScored', payload: { scoringTeam, scoreA, scoreB } });
     const kickingTeam = scoringTeam === 'A' ? 'B' : 'A'; // Opponent kicks off
     resetPositions(kickingTeam); // Reset positions for kickoff
-}
+} // End of handleGoal
 
-function updateGame() { if (gameState !== 'FIRST_HALF' && gameState !== 'SECOND_HALF') return; const startTime = Date.now(); try { players.forEach(updatePlayerAI); players.forEach(updatePlayerPosition); updateBallPhysics(); } catch (error) { console.error("Error during game update logic:", error); // Stop interval on error? Maybe not best. } const realTimeSinceLastUpdate = MILLISECONDS_PER_UPDATE; const ingameSecondsIncrement = (realTimeSinceLastUpdate / 1000) * GAME_SPEED_FACTOR; serverGameTime += ingameSecondsIncrement; const maxHalfTime = 45 * 60; const maxFullTime = 90 * 60; if (gameState === 'FIRST_HALF' && serverGameTime >= maxHalfTime) { serverGameTime = maxHalfTime; handleHalfTime(); } else if (gameState === 'SECOND_HALF' && serverGameTime >= maxFullTime) { serverGameTime = maxFullTime; handleFullTime(); } const updateDuration = Date.now() - startTime; if (updateDuration > MILLISECONDS_PER_UPDATE * 1.5) { logDebug(`Warning: Game update took ${updateDuration}ms (budget ${MILLISECONDS_PER_UPDATE}ms)`); } }
+function updateGame() {
+    if (gameState !== 'FIRST_HALF' && gameState !== 'SECOND_HALF') return;
+    const startTime = Date.now();
+    try {
+        players.forEach(updatePlayerAI);
+        players.forEach(updatePlayerPosition);
+        updateBallPhysics();
+    } catch (error) {
+        console.error("Error during game update logic:", error);
+        // Consider stopping interval or handling error more gracefully
+    }
+    const realTimeSinceLastUpdate = MILLISECONDS_PER_UPDATE;
+    const ingameSecondsIncrement = (realTimeSinceLastUpdate / 1000) * GAME_SPEED_FACTOR;
+    serverGameTime += ingameSecondsIncrement;
+    const maxHalfTime = 45 * 60;
+    const maxFullTime = 90 * 60;
+
+    if (gameState === 'FIRST_HALF' && serverGameTime >= maxHalfTime) {
+        serverGameTime = maxHalfTime;
+        handleHalfTime();
+    } else if (gameState === 'SECOND_HALF' && serverGameTime >= maxFullTime) {
+        serverGameTime = maxFullTime;
+        handleFullTime();
+    }
+
+    const updateDuration = Date.now() - startTime;
+    if (updateDuration > MILLISECONDS_PER_UPDATE * 1.5) {
+        logDebug(`Warning: Game update took ${updateDuration}ms (budget ${MILLISECONDS_PER_UPDATE}ms)`);
+    }
+} // End of updateGame
 
 // --- Game Flow Control ---
 function startMatch() { logDebug(`[State Transition] Starting Match: ${teamA?.name} vs ${teamB?.name}`); if (!teamA || !teamB || players.length !== 22) { console.error("Cannot start match, teams/players not set up correctly. Restarting sequence."); startInitialSequence(); return; } if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; resetPositions('A'); // Team A always kicks off first half resetStats(); // Stats should be reset by setupTeams, but ensure here. scoreA = 0; scoreB = 0; serverGameTime = 0; halfStartTimeStamp = Date.now(); gameState = 'FIRST_HALF'; broadcast({ type: 'matchStart', payload: { teamA, teamB, oddsA, oddsB } }); gameLogicInterval = setInterval(updateGame, MILLISECONDS_PER_UPDATE); logDebug("Game logic interval started for First Half."); }
@@ -889,7 +918,7 @@ function prepareNextMatchDetails() {
     teamB = currentTeamB;
 
     logDebug(`Next match prepared: ${nextMatchTeamA.name} (${nextMatchOddsA}) vs ${nextMatchTeamB.name} (${nextMatchOddsB})`);
-}
+} // End of prepareNextMatchDetails
 
 // REVISED: handleFullTime
 function handleFullTime() {
@@ -929,7 +958,7 @@ function handleFullTime() {
     // Schedule the function that will actually set up and start the next match
     breakTimerTimeout = setTimeout(setupAndStartNextMatch, BETWEEN_MATCH_BREAK_MS);
     logDebug(`Full Time. Next match setup scheduled for ${new Date(breakEndTime).toLocaleTimeString()}`);
-}
+} // End of handleFullTime
 
 // REVISED: setupAndStartNextMatch (was setupNextMatch)
 function setupAndStartNextMatch() {
@@ -973,7 +1002,7 @@ function setupAndStartNextMatch() {
         }
     }, 2000); // 2 second pre-match display
     logDebug(`Next match setup complete (${teamA.name} vs ${teamB.name}). Starting in 2s.`);
-}
+} // End of setupAndStartNextMatch
 
 // REVISED: resolveAllBets (added logging, NaN check)
 function resolveAllBets() {
@@ -1032,9 +1061,9 @@ function resolveAllBets() {
 
             clientData.currentBet = null; // Clear the bet after resolving
         }
-    });
+    }); // End of client loop
     logDebug("Bet resolution complete.");
-}
+} // End of resolveAllBets
 
 // --- Initial Sequence ---
 // REVISED: startInitialSequence
@@ -1093,7 +1122,7 @@ function startInitialSequence() {
             logDebug(`Warning: Initial wait timer finished, but game state was already ${gameState}. No action taken.`);
         }
     }, INITIAL_BETTING_WAIT_MS);
-}
+} // End of startInitialSequence
 
 // --- Helper Functions (Moved Before Usage) ---
 // REVISED: createFullGameStatePayload
@@ -1133,7 +1162,7 @@ function createFullGameStatePayload() {
         // Let's keep it separate for now for clarity. Client uses 'fullTime' payload.
         // nextMatchInfo: (gameState === 'FULL_TIME') ? { teamA: nextMatchTeamA, teamB: nextMatchTeamB, oddsA: nextMatchOddsA, oddsB: nextMatchOddsB } : null
     };
-}
+} // End of createFullGameStatePayload
 
 function calculateCurrentDisplayTime() {
     // This function definition is now here, before setInterval uses it
@@ -1142,7 +1171,7 @@ function calculateCurrentDisplayTime() {
     else if (gameState === 'HALF_TIME') { return 45 * 60; }
     else if (gameState === 'FULL_TIME' || gameState === 'BETWEEN_GAMES' || gameState === 'PRE_MATCH') { return 90 * 60; }
     else { return 0; }
-}
+} // End of calculateCurrentDisplayTime
 
 // --- Periodic State Broadcast ---
 setInterval(() => {
@@ -1158,7 +1187,7 @@ setInterval(() => {
             }
         });
     }
-}, 200); // Reduced broadcast frequency slightly
+}, 200); // End of setInterval
 
 // --- WebSocket Connection Handling ---
 wss.on('connection', (ws, req) => {
@@ -1201,7 +1230,7 @@ wss.on('connection', (ws, req) => {
                         logDebug(`Invalid nickname attempt from ${clientData.id}: "${data.payload}"`);
                         sendToClient(ws, { type: 'systemMessage', payload: { message: 'Invalid nickname (1-15 chars).', isError: true } });
                     }
-                    break;
+                    break; // End case 'setNickname'
 
                 case 'chatMessage':
                     if (clientData.nickname && data.payload && typeof data.payload === 'string') {
@@ -1212,23 +1241,23 @@ wss.on('connection', (ws, req) => {
                     } else if (!clientData.nickname) {
                         sendToClient(ws, { type: 'systemMessage', payload: { message: 'Please set a nickname to chat.', isError: true } });
                     }
-                    break;
+                    break; // End case 'chatMessage'
 
                 case 'placeBet':
                     const isBettingPeriod = (gameState === 'INITIAL_BETTING' || gameState === 'FULL_TIME' || gameState === 'PRE_MATCH'); // Removed BETWEEN_GAMES
 
                     if (!clientData.nickname) {
                         sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Set nickname to bet.', newBalance: clientData.balance } });
-                        break;
+                        break; // Exit case
                     }
                     if (!isBettingPeriod) {
                         sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Betting is currently closed.', newBalance: clientData.balance } });
-                        break;
+                        break; // Exit case
                     }
                     if (clientData.currentBet) {
                         const betOnTeamName = clientData.currentBet.team === 'A' ? (clientData.currentBet.teamAName || 'Team A') : (clientData.currentBet.teamBName || 'Team B');
                         sendToClient(ws, { type: 'betResult', payload: { success: false, message: `Bet already placed on ${betOnTeamName}.`, newBalance: clientData.balance } });
-                        break;
+                        break; // Exit case
                     }
 
                     const betPayload = data.payload;
@@ -1272,19 +1301,19 @@ wss.on('connection', (ws, req) => {
                         logDebug(`Invalid bet attempt from ${clientData.nickname}:`, betPayload);
                         sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Invalid bet amount or team.', newBalance: clientData.balance } });
                     }
-                    break;
+                    break; // End case 'placeBet'
 
                 default:
                     logDebug(`Unknown message type from ${clientData.id}: ${data.type}`);
-            }
+            } // End switch
         } catch (error) {
             console.error(`Failed to process message or invalid JSON from ${clientId}: ${message}`, error);
             const clientData = clients.get(ws);
             if (clientData) {
                 sendToClient(ws, { type: 'systemMessage', payload: { message: 'Error processing your request.', isError: true } });
             }
-        }
-    });
+        } // End try-catch
+    }); // End ws.on('message')
 
     ws.on('close', (code, reason) => {
         const clientData = clients.get(ws);
@@ -1298,7 +1327,7 @@ wss.on('connection', (ws, req) => {
         } else {
             logDebug(`Unknown client disconnected. Code: ${code}, Reason: ${reasonString}`);
         }
-    });
+    }); // End ws.on('close')
 
     ws.on('error', (error) => {
         const clientData = clients.get(ws);
@@ -1310,7 +1339,8 @@ wss.on('connection', (ws, req) => {
         try {
             ws.terminate();
         } catch (e) { /* ignore */ }
-    });
+    }); // End ws.on('error')
+
 }); // End of wss.on('connection')
 
 // --- Server Start ---
@@ -1318,7 +1348,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`HTTP and WebSocket server listening on port ${PORT}`);
     startInitialSequence();
-});
+}); // End server.listen
 
 // --- Graceful Shutdown ---
 function gracefulShutdown(signal) {
@@ -1335,13 +1365,13 @@ function gracefulShutdown(signal) {
             console.log("Forcing remaining WebSocket connections closed.");
             wss.clients.forEach(ws => ws.terminate());
         }, 2000); // Give sockets 2 seconds to close gracefully
-    });
+    }); // End server.close callback
     // Force exit if graceful shutdown takes too long
     setTimeout(() => {
         console.error("Graceful shutdown timeout exceeded. Forcing exit.");
         process.exit(1);
     }, 10000); // 10 seconds timeout
-}
+} // End gracefulShutdown
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
