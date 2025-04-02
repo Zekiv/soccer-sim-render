@@ -73,13 +73,13 @@ const TACKLE_COOLDOWN = 20;
 const DISPOSSESSED_COOLDOWN = 10;
 
 // --- Team Data ---
-// IMPORTANT: Copy the full nationalTeams array here
+// IMPORTANT: Replace with the actual nationalTeams array
 const nationalTeams = [
     { name: "Argentina", color: "#75AADB", rating: 92 }, { name: "France", color: "#003399", rating: 91 }, { name: "Brazil", color: "#FFDF00", rating: 90 }, { name: "England", color: "#FFFFFF", textColor: "#000000", rating: 89 }, { name: "Belgium", color: "#ED2939", rating: 88 }, { name: "Croatia", color: "#FF0000", rating: 87 }, { name: "Netherlands", color: "#FF6600", rating: 87 }, { name: "Italy", color: "#003399", rating: 86 }, { name: "Portugal", color: "#006600", rating: 86 }, { name: "Spain", color: "#FF0000", rating: 85 }, { name: "Morocco", color: "#006233", rating: 84 }, { name: "Switzerland", color: "#FF0000", rating: 84 }, { name: "USA", color: "#002868", rating: 83 }, { name: "Germany", color: "#000000", rating: 83 }, { name: "Mexico", color: "#006847", rating: 82 }, { name: "Uruguay", color: "#5CBFEB", rating: 82 }, { name: "Colombia", color: "#FCD116", rating: 81 }, { name: "Senegal", color: "#00853F", rating: 81 }, { name: "Denmark", color: "#C60C30", rating: 80 }, { name: "Japan", color: "#000080", rating: 80 }, { name: "Peru", color: "#D91023", rating: 79 }, { name: "Iran", color: "#239F40", rating: 79 }, { name: "Serbia", color: "#C6363C", rating: 78 }, { name: "Poland", color: "#DC143C", rating: 78 }, { name: "Sweden", color: "#006AA7", rating: 78 }, { name: "Ukraine", color: "#005BBB", rating: 77 }, { name: "South Korea", color: "#FFFFFF", textColor:"#000000", rating: 77 }, { name: "Chile", color: "#D52B1E", rating: 76 }, { name: "Tunisia", color: "#E70013", rating: 76 }, { name: "Costa Rica", color: "#002B7F", rating: 75 }, { name: "Australia", color: "#00843D", rating: 75 }, { name: "Nigeria", color: "#008751", rating: 75 }, { name: "Austria", color: "#ED2939", rating: 74 }, { name: "Hungary", color: "#436F4D", rating: 74 }, { name: "Russia", color: "#FFFFFF", textColor:"#000000", rating: 73 }, { name: "Czech Republic", color: "#D7141A", rating: 73 }, { name: "Egypt", color: "#C8102E", rating: 73 }, { name: "Algeria", color: "#006233", rating: 72 }, { name: "Scotland", color: "#0065BF", rating: 72 }, { name: "Norway", color: "#EF2B2D", rating: 72 }, { name: "Turkey", color: "#E30A17", rating: 71 }, { name: "Mali", color: "#14B53A", rating: 71 }, { name: "Paraguay", color: "#DA121A", rating: 70 }, { name: "Ivory Coast", color: "#FF8200", rating: 70 }, { name: "Republic of Ireland", color: "#169B62", rating: 70 }, { name: "Qatar", color: "#8A1538", rating: 69 }, { name: "Saudi Arabia", color: "#006C35", rating: 69 }, { name: "Greece", color: "#0D5EAF", rating: 69 }, { name: "Romania", color: "#002B7F", rating: 68 },
 ];
 let availableTeams = [];
 
-// IMPORTANT: Copy the full sampleSquads object (with representative player names) here
+// IMPORTANT: Replace with the actual sampleSquads object
 const sampleSquads = {
     "Argentina": ["E Martinez", "N Molina", "C Romero", "L Martinez", "N Tagliafico", "R De Paul", "E Fernandez", "A Mac Allister", "L Messi", "J Alvarez", "A Di Maria"],
     "France": ["M Maignan", "J Kounde", "D Upamecano", "W Saliba", "T Hernandez", "A Tchouameni", "A Rabiot", "A Griezmann", "O Dembele", "K Mbappe", "M Thuram"],
@@ -989,7 +989,7 @@ function resolveAllBets() {
             const betTeamId = bet.team; // 'A' or 'B'
             // Use the team names stored *with the bet* for the message
             const betTeamName = betTeamId === 'A' ? (bet.teamAName || 'Team A') : (bet.teamBName || 'Team B');
-            // Get the odds that were valid for the match just ended
+            // Get the odds that were valid for the match just ended (global oddsA/B)
             const oddsVal = betTeamId === 'A' ? oddsA : oddsB;
             const odds = parseFloat(oddsVal);
 
@@ -1161,14 +1161,187 @@ setInterval(() => {
 }, 200); // Reduced broadcast frequency slightly
 
 // --- WebSocket Connection Handling ---
-wss.on('connection', (ws, req) => { const remoteAddress = req.socket.remoteAddress; const clientId = `user-${Date.now()}-${Math.random().toString(36).substring(7)}`; logDebug(`Client connected: ${clientId} from ${remoteAddress}`); clients.set(ws, { id: clientId, nickname: null, balance: 100, currentBet: null }); sendToClient(ws, { type: 'currentGameState', payload: createFullGameStatePayload() }); ws.on('message', (message) => { let data; try { if (typeof message !== 'string' && !Buffer.isBuffer(message)) { logDebug(`Received non-string/non-buffer message from ${clientId}, ignoring.`); return; } const messageText = Buffer.isBuffer(message) ? message.toString('utf8') : message; data = JSON.parse(messageText); const clientData = clients.get(ws); if (!clientData) { logDebug(`Received message from stale/unknown client. Terminating.`); ws.terminate(); return; } switch (data.type) { case 'setNickname': const nick = data.payload?.trim(); if (nick && nick.length > 0 && nick.length <= 15) { const oldNickname = clientData.nickname; clientData.nickname = nick; logDebug(`Client ${clientData.id} set nickname to ${nick}`); sendToClient(ws, { type: 'welcome', payload: { nickname: nick, balance: clientData.balance, currentBet: clientData.currentBet } }); if (nick !== oldNickname) { const joinMsg = oldNickname ? `${oldNickname} changed name to ${nick}` : `${nick} has joined.`; broadcast({ type: 'chatBroadcast', payload: { sender: 'System', message: joinMsg } }); } } else { logDebug(`Invalid nickname attempt from ${clientData.id}: "${data.payload}"`); sendToClient(ws, { type: 'systemMessage', payload: { message: 'Invalid nickname (1-15 chars).', isError: true } }); } break; case 'chatMessage': if (clientData.nickname && data.payload && typeof data.payload === 'string') { const chatMsg = data.payload.substring(0, 100).trim(); if (chatMsg.length > 0) { broadcast({ type: 'chatBroadcast', payload: { sender: clientData.nickname, message: chatMsg } }); } } else if (!clientData.nickname) { sendToClient(ws, { type: 'systemMessage', payload: { message: 'Please set a nickname to chat.', isError: true } }); } break; case 'placeBet': const isBettingPeriod = (gameState === 'INITIAL_BETTING' || gameState === 'FULL_TIME' || gameState === 'PRE_MATCH' || gameState === 'BETWEEN_GAMES'); if (!clientData.nickname) { sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Set nickname to bet.', newBalance: clientData.balance } }); break; } if (!isBettingPeriod) { sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Betting is currently closed.', newBalance: clientData.balance } }); break; } if (clientData.currentBet) { // Determine which team names were relevant when the bet was PLACED const betOnTeamName = clientData.currentBet.team === 'A' ? (clientData.currentBet.teamAName || 'Team A') : (clientData.currentBet.teamBName || 'Team B'); sendToClient(ws, { type: 'betResult', payload: { success: false, message: `Bet already placed on ${betOnTeamName}.`, newBalance: clientData.balance } }); break; } const betPayload = data.payload; const betAmount = parseInt(betPayload?.amount, 10); const betTeam = betPayload?.team; if ((betTeam === 'A' || betTeam === 'B') && !isNaN(betAmount) && betAmount > 0) { if (betAmount > clientData.balance) { sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Insufficient balance.', newBalance: clientData.balance } }); } else { clientData.balance -= betAmount; // Determine team names for the bet context (could be current or next match) let currentBetTeamA = teamA; let currentBetTeamB = teamB; let currentOddsA = oddsA; let currentOddsB = oddsB; if(gameState === 'FULL_TIME' || gameState === 'BETWEEN_GAMES' || gameState === 'PRE_MATCH') { // Use next match details if available for context currentBetTeamA = nextMatchTeamA || teamA; currentBetTeamB = nextMatchTeamB || teamB; currentOddsA = nextMatchOddsA || oddsA; currentOddsB = nextMatchOddsB || oddsB; } clientData.currentBet = { team: betTeam, amount: betAmount, // Store names and odds at time of bet for clarity in messages teamAName: currentBetTeamA?.name, teamBName: currentBetTeamB?.name, oddsA: currentOddsA, // Store odds used for potential display/refund oddsB: currentOddsB }; const betOnTeamName = betTeam === 'A' ? (currentBetTeamA?.name || 'Team A') : (currentBetTeamB?.name || 'Team B'); sendToClient(ws, { type: 'betResult', payload: { success: true, message: `Bet $${betAmount} on ${betOnTeamName} placed.`, newBalance: clientData.balance } }); logDebug(`${clientData.nickname} bet $${betAmount} on ${betTeam}`); } } else { logDebug(`Invalid bet attempt from ${clientData.nickname}:`, betPayload); sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Invalid bet amount or team.', newBalance: clientData.balance } }); } break; default: logDebug(`Unknown message type from ${clientData.id}: ${data.type}`); } } catch (error) { console.error(`Failed to process message or invalid JSON from ${clientId}: ${message}`, error); const clientData = clients.get(ws); if (clientData) { sendToClient(ws, { type: 'systemMessage', payload: { message: 'Error processing your request.', isError: true } }); } } }); ws.on('close', (code, reason) => { const clientData = clients.get(ws); const reasonString = reason ? reason.toString() : 'N/A'; if (clientData) { logDebug(`Client disconnected: ${clientData.nickname || clientData.id}. Code: ${code}, Reason: ${reasonString}`); if (clientData.nickname) { broadcast({ type: 'chatBroadcast', payload: { sender: 'System', message: `${clientData.nickname} has left.` } }); } clients.delete(ws); } else { logDebug(`Unknown client disconnected. Code: ${code}, Reason: ${reasonString}`); } }); ws.on('error', (error) => { const clientData = clients.get(ws); console.error(`WebSocket error for client ${clientData?.nickname || clientData?.id || 'UNKNOWN'}:`, error); if (clients.has(ws)) { logDebug(`Removing client ${clientData?.id || 'UNKNOWN'} due to error.`); clients.delete(ws); } try { ws.terminate(); } catch (e) { /* ignore */ } }); });
+wss.on('connection', (ws, req) => {
+    const remoteAddress = req.socket.remoteAddress;
+    const clientId = `user-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    logDebug(`Client connected: ${clientId} from ${remoteAddress}`);
+    clients.set(ws, { id: clientId, nickname: null, balance: 100, currentBet: null });
+
+    sendToClient(ws, { type: 'currentGameState', payload: createFullGameStatePayload() });
+
+    ws.on('message', (message) => {
+        let data;
+        try {
+            if (typeof message !== 'string' && !Buffer.isBuffer(message)) {
+                logDebug(`Received non-string/non-buffer message from ${clientId}, ignoring.`);
+                return;
+            }
+            const messageText = Buffer.isBuffer(message) ? message.toString('utf8') : message;
+            data = JSON.parse(messageText);
+            const clientData = clients.get(ws);
+            if (!clientData) {
+                logDebug(`Received message from stale/unknown client. Terminating.`);
+                ws.terminate();
+                return;
+            }
+
+            switch (data.type) {
+                case 'setNickname':
+                    const nick = data.payload?.trim();
+                    if (nick && nick.length > 0 && nick.length <= 15) {
+                        const oldNickname = clientData.nickname;
+                        clientData.nickname = nick;
+                        logDebug(`Client ${clientData.id} set nickname to ${nick}`);
+                        sendToClient(ws, { type: 'welcome', payload: { nickname: nick, balance: clientData.balance, currentBet: clientData.currentBet } });
+                        if (nick !== oldNickname) {
+                            const joinMsg = oldNickname ? `${oldNickname} changed name to ${nick}` : `${nick} has joined.`;
+                            broadcast({ type: 'chatBroadcast', payload: { sender: 'System', message: joinMsg } });
+                        }
+                    } else {
+                        logDebug(`Invalid nickname attempt from ${clientData.id}: "${data.payload}"`);
+                        sendToClient(ws, { type: 'systemMessage', payload: { message: 'Invalid nickname (1-15 chars).', isError: true } });
+                    }
+                    break;
+
+                case 'chatMessage':
+                    if (clientData.nickname && data.payload && typeof data.payload === 'string') {
+                        const chatMsg = data.payload.substring(0, 100).trim();
+                        if (chatMsg.length > 0) {
+                            broadcast({ type: 'chatBroadcast', payload: { sender: clientData.nickname, message: chatMsg } });
+                        }
+                    } else if (!clientData.nickname) {
+                        sendToClient(ws, { type: 'systemMessage', payload: { message: 'Please set a nickname to chat.', isError: true } });
+                    }
+                    break;
+
+                case 'placeBet':
+                    const isBettingPeriod = (gameState === 'INITIAL_BETTING' || gameState === 'FULL_TIME' || gameState === 'PRE_MATCH'); // Removed BETWEEN_GAMES
+
+                    if (!clientData.nickname) {
+                        sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Set nickname to bet.', newBalance: clientData.balance } });
+                        break;
+                    }
+                    if (!isBettingPeriod) {
+                        sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Betting is currently closed.', newBalance: clientData.balance } });
+                        break;
+                    }
+                    if (clientData.currentBet) {
+                        const betOnTeamName = clientData.currentBet.team === 'A' ? (clientData.currentBet.teamAName || 'Team A') : (clientData.currentBet.teamBName || 'Team B');
+                        sendToClient(ws, { type: 'betResult', payload: { success: false, message: `Bet already placed on ${betOnTeamName}.`, newBalance: clientData.balance } });
+                        break;
+                    }
+
+                    const betPayload = data.payload;
+                    const betAmount = parseInt(betPayload?.amount, 10);
+                    const betTeam = betPayload?.team; // 'A' or 'B'
+
+                    if ((betTeam === 'A' || betTeam === 'B') && !isNaN(betAmount) && betAmount > 0) {
+                        if (betAmount > clientData.balance) {
+                            sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Insufficient balance.', newBalance: clientData.balance } });
+                        } else {
+                            clientData.balance -= betAmount;
+
+                            // Determine team names for the bet context (could be current or next match)
+                            let currentBetTeamA = teamA;
+                            let currentBetTeamB = teamB;
+                            let currentOddsA = oddsA;
+                            let currentOddsB = oddsB;
+
+                            if(gameState === 'FULL_TIME' || gameState === 'PRE_MATCH') { // During betting for next match
+                                currentBetTeamA = nextMatchTeamA || teamA; // Use prepared next team if available
+                                currentBetTeamB = nextMatchTeamB || teamB;
+                                currentOddsA = nextMatchOddsA || oddsA;
+                                currentOddsB = nextMatchOddsB || oddsB;
+                            } // Else (INITIAL_BETTING), use current teamA/B/oddsA/B
+
+                            clientData.currentBet = {
+                                team: betTeam,
+                                amount: betAmount,
+                                // Store names and odds at time of bet for clarity in messages
+                                teamAName: currentBetTeamA?.name,
+                                teamBName: currentBetTeamB?.name,
+                                oddsA: currentOddsA,
+                                oddsB: currentOddsB
+                            };
+
+                            const betOnTeamName = betTeam === 'A' ? (currentBetTeamA?.name || 'Team A') : (currentBetTeamB?.name || 'Team B');
+                            sendToClient(ws, { type: 'betResult', payload: { success: true, message: `Bet $${betAmount} on ${betOnTeamName} placed.`, newBalance: clientData.balance } });
+                            logDebug(`${clientData.nickname} bet $${betAmount} on ${betTeam}`);
+                        }
+                    } else {
+                        logDebug(`Invalid bet attempt from ${clientData.nickname}:`, betPayload);
+                        sendToClient(ws, { type: 'betResult', payload: { success: false, message: 'Invalid bet amount or team.', newBalance: clientData.balance } });
+                    }
+                    break;
+
+                default:
+                    logDebug(`Unknown message type from ${clientData.id}: ${data.type}`);
+            }
+        } catch (error) {
+            console.error(`Failed to process message or invalid JSON from ${clientId}: ${message}`, error);
+            const clientData = clients.get(ws);
+            if (clientData) {
+                sendToClient(ws, { type: 'systemMessage', payload: { message: 'Error processing your request.', isError: true } });
+            }
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        const clientData = clients.get(ws);
+        const reasonString = reason ? reason.toString() : 'N/A';
+        if (clientData) {
+            logDebug(`Client disconnected: ${clientData.nickname || clientData.id}. Code: ${code}, Reason: ${reasonString}`);
+            if (clientData.nickname) {
+                broadcast({ type: 'chatBroadcast', payload: { sender: 'System', message: `${clientData.nickname} has left.` } });
+            }
+            clients.delete(ws);
+        } else {
+            logDebug(`Unknown client disconnected. Code: ${code}, Reason: ${reasonString}`);
+        }
+    });
+
+    ws.on('error', (error) => {
+        const clientData = clients.get(ws);
+        console.error(`WebSocket error for client ${clientData?.nickname || clientData?.id || 'UNKNOWN'}:`, error);
+        if (clients.has(ws)) {
+            logDebug(`Removing client ${clientData?.id || 'UNKNOWN'} due to error.`);
+            clients.delete(ws);
+        }
+        try {
+            ws.terminate();
+        } catch (e) { /* ignore */ }
+    });
+}); // End of wss.on('connection')
 
 // --- Server Start ---
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => { console.log(`HTTP and WebSocket server listening on port ${PORT}`); startInitialSequence(); });
+server.listen(PORT, () => {
+    console.log(`HTTP and WebSocket server listening on port ${PORT}`);
+    startInitialSequence();
+});
 
 // --- Graceful Shutdown ---
-function gracefulShutdown(signal) { console.log(`${signal} received: closing server...`); if (gameLogicInterval) clearInterval(gameLogicInterval); if (breakTimerTimeout) clearTimeout(breakTimerTimeout); server.close(() => { console.log('HTTP server closed.'); wss.close(() => { console.log('WebSocket server closed.'); process.exit(0); }); setTimeout(() => { console.log("Forcing remaining WebSocket connections closed."); wss.clients.forEach(ws => ws.terminate()); }, 2000); }); setTimeout(() => { console.error("Graceful shutdown timeout exceeded. Forcing exit."); process.exit(1); }, 10000); }
+function gracefulShutdown(signal) {
+    console.log(`${signal} received: closing server...`);
+    if (gameLogicInterval) clearInterval(gameLogicInterval);
+    if (breakTimerTimeout) clearTimeout(breakTimerTimeout);
+    server.close(() => {
+        console.log('HTTP server closed.');
+        wss.close(() => {
+            console.log('WebSocket server closed.');
+            process.exit(0);
+        });
+        setTimeout(() => {
+            console.log("Forcing remaining WebSocket connections closed.");
+            wss.clients.forEach(ws => ws.terminate());
+        }, 2000); // Give sockets 2 seconds to close gracefully
+    });
+    // Force exit if graceful shutdown takes too long
+    setTimeout(() => {
+        console.error("Graceful shutdown timeout exceeded. Forcing exit.");
+        process.exit(1);
+    }, 10000); // 10 seconds timeout
+}
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
