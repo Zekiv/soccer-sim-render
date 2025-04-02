@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Soccer Tournament Sim</title>
     <style>
-        /* ... (Copy the exact same CSS from the previous single-file version) ... */
+        /* ... (Exact same CSS as before) ... */
         body { font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; color: #333; height: 100vh; overflow: hidden; }
         .container { display: flex; width: 95%; max-width: 1400px; margin-top: 10px; height: calc(100vh - 150px); gap: 10px; }
         .game-area { flex-grow: 3; display: flex; flex-direction: column; background-color: #e0e0e0; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: relative; }
         #gameCanvas { width: 100%; height: calc(100% - 60px); background-color: #2a8c3e; border: 2px solid white; box-sizing: border-box; display: block; }
         .match-info { display: flex; justify-content: space-around; align-items: center; padding: 10px 0; font-size: 1.2em; font-weight: bold; background-color: #f8f8f8; border-radius: 5px; margin-bottom: 10px; }
-        .team-name { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 10px; }
+        .team-name { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 10px; min-width: 100px; } /* Added min-width */
         .score { padding: 0 20px; }
         .game-time { min-width: 80px; text-align: center; }
         .sidebar { flex-grow: 1; background-color: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-y: auto; display: flex; flex-direction: column; min-width: 200px; }
@@ -40,7 +40,7 @@
         .bet-button-a:hover { background-color: #1e88e5; }
         .bet-button-b { background-color: #f44336; }
         .bet-button-b:hover { background-color: #e53935; }
-        .bet-button:disabled { background-color: #ccc; cursor: not-allowed; }
+        button:disabled { background-color: #ccc !important; cursor: not-allowed !important; } /* More specific disabled style */
         .bet-message { font-size: 0.8em; color: green; text-align: center; min-height: 1.2em; margin-top: 5px; }
         .bet-error { color: red; }
         #nicknameModal { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
@@ -49,7 +49,7 @@
         .modal-content input { padding: 8px; margin-bottom: 15px; width: 200px; border: 1px solid #ccc; border-radius: 4px; }
         .modal-content button { padding: 10px 20px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 1em; }
         .modal-content button:hover { background-color: #45a049; }
-        .halftime-overlay, .fulltime-overlay, .initial-wait-overlay { position: absolute; top: 60px; left: 10px; right: 10px; bottom: 10px; height: calc(100% - 70px); width: calc(100% - 20px); background-color: rgba(0, 0, 0, 0.7); color: white; display: none; /* Initially hidden */ flex-direction: column; justify-content: center; align-items: center; font-size: 2em; text-align: center; z-index: 10; border-radius: 5px; box-sizing: border-box; }
+        .halftime-overlay, .fulltime-overlay, .initial-wait-overlay { position: absolute; top: 60px; /* Below match info */ left: 10px; right: 10px; bottom: 10px; height: calc(100% - 70px); width: calc(100% - 20px); background-color: rgba(0, 0, 0, 0.7); color: white; display: none; /* Initially hidden */ flex-direction: column; justify-content: center; align-items: center; font-size: 2em; text-align: center; z-index: 10; border-radius: 5px; box-sizing: border-box; }
         #connectionStatus {
             position: fixed;
             top: 5px;
@@ -60,10 +60,10 @@
             border-radius: 4px;
             font-size: 0.8em;
             z-index: 1001;
+            transition: background-color 0.5s ease;
         }
         #connectionStatus.connected { background-color: #28a745; color: white; }
         #connectionStatus.error { background-color: #dc3545; color: white; }
-
     </style>
 </head>
 <body>
@@ -71,7 +71,7 @@
 
     <div id="nicknameModal">
          <div class="modal-content">
-            <label for="nicknameInput">Enter Nickname (to Chat & Bet):</label>
+            <label for="nicknameInput">Enter Nickname (1-15 chars):</label>
             <input type="text" id="nicknameInput" maxlength="15">
             <button id="submitNickname">Join Interaction</button>
         </div>
@@ -80,13 +80,13 @@
     <div class="container">
         <div class="game-area">
              <div class="match-info">
-                  <span id="teamAName" class="team-name">---</span>
+                  <span id="teamANameEl" class="team-name">---</span>
                   <span class="score"><span id="scoreA">0</span> - <span id="scoreB">0</span></span>
-                  <span id="teamBName" class="team-name">---</span>
-                  <span id="gameTime" class="game-time">00:00</span>
+                  <span id="teamBNameEl" class="team-name">---</span>
+                  <span id="gameTimeEl" class="game-time">00:00</span>
              </div>
             <canvas id="gameCanvas"></canvas>
-            <!-- Overlays will be controlled by JS based on server state -->
+            <!-- Overlays -->
              <div id="initialWaitOverlay" class="initial-wait-overlay">
                 Tournament Starting Soon!<br>
                 Betting is Open!<br>
@@ -107,7 +107,6 @@
         <div class="sidebar">
              <h3>Live Statistics</h3>
              <table class="stats-table">
-                 <!-- Structure remains -->
                  <thead><tr><th>Stat</th><th id="statsTeamAHeader">A</th><th id="statsTeamBHeader">B</th></tr></thead>
                  <tbody>
                      <tr><td class="stat-label">Possession</td><td id="possessionA">--%</td><td id="possessionB">--%</td></tr>
@@ -117,26 +116,27 @@
                  </tbody>
              </table>
              <h3>Tournament Teams</h3>
-             <ul id="teamList" style="font-size: 0.8em; padding-left: 20px; margin-bottom: 20px; list-style: decimal;"></ul>
-             <div id="gameStatusMessage" style="text-align: center; margin-top: auto; font-style: italic;">Connecting to simulation...</div>
+             <ul id="teamListEl" style="font-size: 0.8em; padding-left: 20px; margin-bottom: 20px; list-style: decimal;">
+                 <!-- Server could populate this eventually -->
+             </ul>
+             <div id="gameStatusMessageEl" style="text-align: center; margin-top: auto; font-style: italic; padding-top: 10px;">Connecting to simulation...</div>
         </div>
     </div>
 
     <div class="chat-betting-area">
-        <!-- Structure remains -->
         <div class="chat-container">
-             <div id="chatBox" class="chat-box">Welcome! Connecting to chat...</div>
+             <div id="chatBoxEl" class="chat-box">Welcome! Connecting to chat...</div>
              <div class="chat-input">
-                 <input type="text" id="chatInput" placeholder="Enter nickname to type..." maxlength="100" disabled>
-                 <button id="sendChat" disabled>Send</button>
+                 <input type="text" id="chatInputEl" placeholder="Enter nickname to type..." maxlength="100" disabled>
+                 <button id="sendChatBtn" disabled>Send</button>
              </div>
          </div>
          <div class="betting-container">
-             <div class="balance">Balance: $<span id="userBalance">---</span></div>
+             <div class="balance">Balance: $<span id="userBalanceEl">---</span></div>
               <div id="bettingControls" class="betting-controls">
-                  <div class="bet-options"><div><span class="bet-team" id="betTeamAName">Team A</span>: <span class="bet-odds" id="oddsA">?.??</span></div><div><span class="bet-team" id="betTeamBName">Team B</span>: <span class="bet-odds" id="oddsB">?.??</span></div></div>
-                  <div class="bet-input-area"><input type="number" id="betAmountInput" min="1" step="1" placeholder="Amt" disabled><button id="betButtonA" class="bet-button bet-button-a" disabled>Bet A</button><button id="betButtonB" class="bet-button bet-button-b" disabled>Bet B</button></div>
-                  <div id="betMessage" class="bet-message">Enter nickname to enable betting.</div>
+                  <div class="bet-options"><div><span class="bet-team" id="betTeamANameEl">Team A</span>: <span class="bet-odds" id="oddsAEl">?.??</span></div><div><span class="bet-team" id="betTeamBNameEl">Team B</span>: <span class="bet-odds" id="oddsBEl">?.??</span></div></div>
+                  <div class="bet-input-area"><input type="number" id="betAmountInputEl" min="1" step="1" placeholder="Amt" disabled><button id="betButtonAEl" class="bet-button bet-button-a" disabled>Bet A</button><button id="betButtonBEl" class="bet-button bet-button-b" disabled>Bet B</button></div>
+                  <div id="betMessageEl" class="bet-message">Enter nickname to enable betting.</div>
               </div>
          </div>
     </div>
@@ -145,54 +145,95 @@
         // --- DOM Elements ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const teamANameEl = document.getElementById('teamAName'); /* ... all other DOM elements ... */
-        const teamBNameEl = document.getElementById('teamBName'); const scoreAEl = document.getElementById('scoreA'); const scoreBEl = document.getElementById('scoreB'); const gameTimeEl = document.getElementById('gameTime'); const statsTeamAHeaderEl = document.getElementById('statsTeamAHeader'); const statsTeamBHeaderEl = document.getElementById('statsTeamBHeader'); const possessionAEl = document.getElementById('possessionA'); const possessionBEl = document.getElementById('possessionB'); const goalsAEl = document.getElementById('goalsA'); const goalsBEl = document.getElementById('goalsB'); const shotsAEl = document.getElementById('shotsA'); const shotsBEl = document.getElementById('shotsB'); const passesAEl = document.getElementById('passesA'); const passesBEl = document.getElementById('passesB'); const teamListEl = document.getElementById('teamList'); const gameStatusMessageEl = document.getElementById('gameStatusMessage'); const chatBoxEl = document.getElementById('chatBox'); const chatInputEl = document.getElementById('chatInput'); const sendChatBtn = document.getElementById('sendChat'); const userBalanceEl = document.getElementById('userBalance'); const betTeamANameEl = document.getElementById('betTeamAName'); const betTeamBNameEl = document.getElementById('betTeamBName'); const oddsAEl = document.getElementById('oddsA'); const oddsBEl = document.getElementById('oddsB'); const betAmountInputEl = document.getElementById('betAmountInput'); const betButtonAEl = document.getElementById('betButtonA'); const betButtonBEl = document.getElementById('betButtonB'); const betMessageEl = document.getElementById('betMessage'); const nicknameModalEl = document.getElementById('nicknameModal'); const nicknameInputEl = document.getElementById('nicknameInput'); const submitNicknameBtn = document.getElementById('submitNickname'); const halftimeOverlayEl = document.getElementById('halftimeOverlay'); const fulltimeOverlayEl = document.getElementById('fulltimeOverlay'); const initialWaitOverlayEl = document.getElementById('initialWaitOverlay'); const breakTimerDisplayEl = document.getElementById('breakTimerDisplay'); const nextMatchTimerDisplayEl = document.getElementById('nextMatchTimerDisplay'); const initialTimerDisplayEl = document.getElementById('initialTimerDisplay');
+        const teamANameEl = document.getElementById('teamANameEl');
+        const teamBNameEl = document.getElementById('teamBNameEl');
+        const scoreAEl = document.getElementById('scoreA');
+        const scoreBEl = document.getElementById('scoreB');
+        const gameTimeEl = document.getElementById('gameTimeEl');
+        const statsTeamAHeaderEl = document.getElementById('statsTeamAHeader');
+        const statsTeamBHeaderEl = document.getElementById('statsTeamBHeader');
+        const possessionAEl = document.getElementById('possessionA');
+        const possessionBEl = document.getElementById('possessionB');
+        const goalsAEl = document.getElementById('goalsA');
+        const goalsBEl = document.getElementById('goalsB');
+        const shotsAEl = document.getElementById('shotsA');
+        const shotsBEl = document.getElementById('shotsB');
+        const passesAEl = document.getElementById('passesA');
+        const passesBEl = document.getElementById('passesB');
+        const teamListEl = document.getElementById('teamListEl');
+        const gameStatusMessageEl = document.getElementById('gameStatusMessageEl');
+        const chatBoxEl = document.getElementById('chatBoxEl');
+        const chatInputEl = document.getElementById('chatInputEl');
+        const sendChatBtn = document.getElementById('sendChatBtn');
+        const userBalanceEl = document.getElementById('userBalanceEl');
+        const betTeamANameEl = document.getElementById('betTeamANameEl');
+        const betTeamBNameEl = document.getElementById('betTeamBNameEl');
+        const oddsAEl = document.getElementById('oddsAEl');
+        const oddsBEl = document.getElementById('oddsBEl');
+        const betAmountInputEl = document.getElementById('betAmountInputEl');
+        const betButtonAEl = document.getElementById('betButtonAEl');
+        const betButtonBEl = document.getElementById('betButtonBEl');
+        const betMessageEl = document.getElementById('betMessageEl');
+        const nicknameModalEl = document.getElementById('nicknameModal');
+        const nicknameInputEl = document.getElementById('nicknameInput');
+        const submitNicknameBtn = document.getElementById('submitNickname');
+        const halftimeOverlayEl = document.getElementById('halftimeOverlay');
+        const fulltimeOverlayEl = document.getElementById('fulltimeOverlay');
+        const initialWaitOverlayEl = document.getElementById('initialWaitOverlay');
+        const breakTimerDisplayEl = document.getElementById('breakTimerDisplay');
+        const nextMatchTimerDisplayEl = document.getElementById('nextMatchTimerDisplay');
+        const initialTimerDisplayEl = document.getElementById('initialTimerDisplay');
         const connectionStatusEl = document.getElementById('connectionStatus');
 
         // --- Client State ---
-        let players = []; // Local copy of player data from server
-        let ball = { x: 0, y: 0 }; // Local copy of ball data
-        let currentGameState = 'INITIALIZING';
-        let userNickname = null; // Set after server confirmation
-        let userBalance = 0; // Updated from server
-        let currentBet = null; // { team, amount } - Local reflection of server state
-        let breakEndTime = null; // Timestamp for break countdowns
-        let breakTimerInterval = null; // For updating break displays
-        let animationFrameId = null; // For rendering loop
+        let players = [];
+        let ball = { x: 0, y: 0, vx: 0, vy: 0, ownerId: null };
+        let currentGameState = 'INITIALIZING'; // Local reflection of server state
+        let userNickname = null;
+        let userBalance = 0;
+        let currentBet = null; // { team: 'A'/'B', amount: number } - Local reflection
+        let breakEndTime = null;
+        let breakTimerInterval = null;
+        let animationFrameId = null;
+        let socket = null;
+        let serverTeamA = null; // Store full team object if needed
+        let serverTeamB = null;
 
         // --- Constants (Client-side, mostly for drawing) ---
         const FIELD_WIDTH = 1050; const FIELD_HEIGHT = 680; const PLAYER_RADIUS = 10; const BALL_RADIUS = 5; const GOAL_WIDTH = 120; const GOAL_DEPTH = 20; const CENTER_CIRCLE_RADIUS = 91.5;
 
         // --- WebSocket Connection ---
-        let socket;
-
         function connectWebSocket() {
-            // Determine WebSocket protocol based on window location protocol
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            // Construct the WebSocket URL (adjust if server is on different domain/port)
-            const wsUrl = `${wsProtocol}//${window.location.host}`; // Assumes server is on same host
+            const wsUrl = `${wsProtocol}//${window.location.host}`;
+            console.log("Connecting WebSocket to:", wsUrl);
 
             connectionStatusEl.textContent = 'Connecting...';
-            connectionStatusEl.className = ''; // Reset class
+            connectionStatusEl.className = '';
 
-            // socket = new WebSocket('ws://localhost:3000'); // Use this for local testing
-            socket = new WebSocket(wsUrl); // Use this for deployment
+            // Cleanup old socket if reconnecting
+            if (socket && socket.readyState !== WebSocket.CLOSED) {
+                socket.close();
+            }
+
+            socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {
                 console.log('WebSocket connection established.');
                 connectionStatusEl.textContent = 'Connected';
                 connectionStatusEl.className = 'connected';
                 gameStatusMessageEl.textContent = "Connected. Waiting for game state...";
-                // Nickname modal remains until user submits
+                // Modal stays until nickname submitted
             };
 
             socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // console.log('Message from server:', data); // Debug: Log all server messages
+                    // console.log('Msg from server:', data.type, data.payload); // Debug: Log incoming messages
                     handleServerMessage(data);
                 } catch (error) {
                     console.error('Failed to parse message or invalid JSON:', event.data, error);
+                    addChatMessage("System", "Received invalid data from server.");
                 }
             };
 
@@ -201,18 +242,23 @@
                 connectionStatusEl.textContent = 'Connection Error';
                 connectionStatusEl.className = 'error';
                 gameStatusMessageEl.textContent = "Connection error. Please refresh.";
-                disableInteraction(); // Disable chat/bet on error
+                disableInteraction("Connection Error");
+                stopRendering();
+                clearTimeout(breakTimerInterval);
+                hideOverlays();
             };
 
             socket.onclose = (event) => {
-                console.log('WebSocket connection closed:', event.reason, `Code: ${event.code}`);
+                console.log(`WebSocket connection closed: Code ${event.code}, Reason: ${event.reason || 'N/A'}`);
                 connectionStatusEl.textContent = 'Disconnected';
                 connectionStatusEl.className = 'error';
-                gameStatusMessageEl.textContent = "Disconnected from server. Refresh maybe required.";
-                disableInteraction();
-                stopRendering(); // Stop drawing loop if disconnected
-                 clearTimeout(breakTimerInterval); // Stop any running break timers
-                 hideOverlays(); // Hide any active overlays
+                gameStatusMessageEl.textContent = "Disconnected. Attempting to reconnect...";
+                disableInteraction("Disconnected");
+                stopRendering();
+                clearTimeout(breakTimerInterval);
+                hideOverlays();
+                // Attempt to reconnect after a delay
+                setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
             };
         }
 
@@ -221,8 +267,7 @@
                 const message = JSON.stringify({ type, payload });
                 socket.send(message);
             } else {
-                console.error("WebSocket is not open. Cannot send message.");
-                // Optionally add user feedback here
+                console.error("WebSocket is not open. Cannot send message:", type);
                 addChatMessage("System", "Error: Cannot send message - not connected.");
             }
         }
@@ -232,84 +277,102 @@
             const { type, payload } = data;
 
             switch (type) {
-                case 'currentGameState': // Sent on initial connect
-                    console.log("Received initial game state:", payload.gameState);
-                    updateCoreGameState(payload);
+                case 'currentGameState': // Sent on initial connect or after major change
+                    console.log("Received full game state:", payload.gameState);
+                    updateCoreGameState(payload); // Update everything based on payload
                     updateTeamUI(payload.teamA, payload.teamB, payload.oddsA, payload.oddsB);
                     updateScoreAndTime(payload.scoreA, payload.scoreB, payload.serverGameTime);
-                    players = payload.players || []; // Update local player data
-                    ball = payload.ball || { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2 }; // Update local ball data
+                    players = payload.players || [];
+                    ball = payload.ball || { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx: 0, vy: 0, ownerId: null };
                     currentGameState = payload.gameState;
-                    handleGameStateChange(currentGameState, payload); // Update overlays/timers
-                    // Don't enable interaction yet, wait for 'welcome' after nickname
+                    // Update stats display if available
+                    if(payload.stats) { updateStatsUI(payload.stats); }
+                    handleGameStateChange(currentGameState, payload); // Set overlays/timers correctly
+                    // Don't enable interaction yet, wait for 'welcome'
+                    checkBettingStatus(); // Re-evaluate betting state based on new game state
                     break;
 
                 case 'initialWait': // Server started the initial countdown
                     console.log("Handling initialWait");
                     updateTeamUI(payload.teamA, payload.teamB, payload.oddsA, payload.oddsB);
+                    updateScoreAndTime(0, 0, 0); // Reset score/time display
                     currentGameState = 'INITIAL_BETTING';
+                    players = []; ball = { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2 }; // Clear field
                     handleGameStateChange(currentGameState, payload);
+                    checkBettingStatus();
                     break;
 
-                case 'matchStart': // A new match (could be first or subsequent)
+                case 'matchStart':
                      console.log("Handling matchStart");
                      updateTeamUI(payload.teamA, payload.teamB, payload.oddsA, payload.oddsB);
-                     updateScoreAndTime(0, 0, 0); // Reset score/time display
+                     updateScoreAndTime(0, 0, 0);
                      currentGameState = 'FIRST_HALF';
                      handleGameStateChange(currentGameState, payload);
-                     // If user has nickname, update bet status message
-                     if (userNickname) setBetMessage("Match started! Betting closed.", true);
+                     checkBettingStatus(); // Betting should be closed now
                     break;
 
                 case 'gameStateUpdate': // Regular update during match
-                    // Avoid changing overlay state here, just update data
+                    // Update only dynamic elements
                     updateScoreAndTime(payload.scoreA, payload.scoreB, payload.serverGameTime);
-                    players = payload.players; // Update local player data
-                    ball = payload.ball; // Update local ball data
-                    currentGameState = payload.gameState; // Keep local state in sync
-                     // Update stats if included (add later if needed)
+                    players = payload.players || []; // Update local player data
+                    ball = payload.ball || { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2 }; // Update local ball data
+                    // currentGameState = payload.gameState; // Server might not send this in frequent updates, rely on event messages for state change
+                     if(payload.stats) { updateStatsUI(payload.stats); }
+                     // No overlay change here, just data update
                     break;
 
                 case 'goalScored':
                     console.log("Handling goalScored");
                     updateScoreAndTime(payload.scoreA, payload.scoreB); // Update score immediately
-                    addChatMessage("System", `GOAL! ${payload.scoringTeam === 'A' ? teamANameEl.textContent : teamBNameEl.textContent} scores!`);
-                    // Maybe add a brief visual flash?
+                    addChatMessage("System", `⚽ GOAL! ${payload.scoringTeam === 'A' ? teamANameEl.textContent : teamBNameEl.textContent} scores! (${payload.scoreA}-${payload.scoreB})`);
+                    // Update stats table goals
+                    goalsAEl.textContent = payload.scoreA;
+                    goalsBEl.textContent = payload.scoreB;
+                    // Visual flash (optional)
+                    canvas.style.transition = 'none';
+                    canvas.style.backgroundColor = '#FFF';
+                    setTimeout(() => {
+                        canvas.style.transition = 'background-color 0.5s ease';
+                        canvas.style.backgroundColor = '#2a8c3e';
+                    }, 100);
                     break;
 
                 case 'halfTime':
                      console.log("Handling halfTime");
-                     updateScoreAndTime(payload.scoreA, payload.scoreB, 45 * 60); // Set time to 45:00
+                     updateScoreAndTime(payload.scoreA, payload.scoreB, 45 * 60);
                      currentGameState = 'HALF_TIME';
                      handleGameStateChange(currentGameState, payload);
+                     checkBettingStatus(); // Betting closed
                      break;
 
                 case 'secondHalfStart':
                     console.log("Handling secondHalfStart");
                     currentGameState = 'SECOND_HALF';
-                    handleGameStateChange(currentGameState, payload);
-                     if (userNickname) setBetMessage("Second half started! Betting closed.", true);
+                    handleGameStateChange(currentGameState, payload); // Hide overlay
+                    checkBettingStatus(); // Betting closed
                     break;
 
                 case 'fullTime':
                      console.log("Handling fullTime");
-                     updateScoreAndTime(payload.scoreA, payload.scoreB, 90 * 60); // Set time to 90:00
+                     updateScoreAndTime(payload.scoreA, payload.scoreB, 90 * 60);
                      currentGameState = 'FULL_TIME';
-                     handleGameStateChange(currentGameState, payload);
-                     // Betting will be implicitly enabled by handleGameStateChange if user logged in
+                     handleGameStateChange(currentGameState, payload); // Show overlay, start timer
+                     currentBet = null; // Match ended, clear local bet state (server handles resolution)
+                     checkBettingStatus(); // Betting should open for next match
                     break;
 
                  case 'welcome': // Server confirms nickname
+                    console.log("Handling welcome");
                     userNickname = payload.nickname;
                     userBalance = payload.balance;
-                    currentBet = payload.currentBet; // Reflect any existing bet state
-                    nicknameModalEl.style.display = 'none'; // Hide modal
+                    currentBet = payload.currentBet; // Restore any existing bet state from server
+                    nicknameModalEl.style.display = 'none';
                     chatInputEl.disabled = false;
                     sendChatBtn.disabled = false;
                     chatInputEl.placeholder = "Type message...";
                     userBalanceEl.textContent = userBalance.toFixed(2);
-                    // Now check if betting should be enabled based on current game state
-                    checkBettingStatusOnWelcome();
+                    addChatMessage("System", `Welcome, ${userNickname}! Your balance is $${userBalance.toFixed(2)}.`);
+                    checkBettingStatus(); // Now check if betting should be enabled based on current game state
                     break;
 
                 case 'chatBroadcast':
@@ -317,25 +380,26 @@
                     break;
 
                 case 'betResult':
+                    console.log("Handling betResult", payload);
                     setBetMessage(payload.message, !payload.success);
                     if (payload.newBalance !== undefined) {
                         userBalance = payload.newBalance;
                         userBalanceEl.textContent = userBalance.toFixed(2);
                     }
-                    // If bet was successful or refunded, it means the 'currentBet' state is cleared server-side
-                    // If bet failed due to reasons other than already placed (e.g., insufficient funds), also clear local state
-                     if(payload.message !== 'Bet already placed.'){
-                         currentBet = null; // Clear local reflection unless specifically told it failed *because* already placed
-                     }
-                    // Re-evaluate betting buttons based on current state after result
+                    // If bet failed because it was already placed, don't clear local state
+                    if (payload.message !== 'Bet already placed.') {
+                         // If successful, or refunded, or failed for other reasons (e.g. insufficient funds), clear local state
+                         // as the server resolved/rejected it definitively.
+                         currentBet = null;
+                    }
+                    // Re-evaluate betting buttons based on new state (e.g., if bet failed, maybe can bet again)
                     checkBettingStatus();
                     break;
 
-                 case 'systemMessage': // General messages from server
+                 case 'systemMessage':
                     addChatMessage("System", payload.message);
                     if (payload.isError) {
-                        // Maybe show error in bet area too?
-                         setBetMessage(payload.message, true);
+                         setBetMessage(payload.message, true); // Show error in bet area too
                     }
                     break;
 
@@ -344,26 +408,61 @@
             }
         }
 
-        // --- UI Update Functions ---
+         // --- UI Update Functions ---
+         function updateCoreGameState(payload) {
+             // Used by 'currentGameState' to set everything initially
+             serverTeamA = payload.teamA; // Store full team objects
+             serverTeamB = payload.teamB;
+             // Any other core state elements can be set here
+         }
+
         function updateTeamUI(teamA, teamB, oddsAVal, oddsBVal) {
-            if (!teamA || !teamB) return;
-            teamANameEl.textContent = teamA.name;
-            teamBNameEl.textContent = teamB.name;
-            betTeamANameEl.textContent = teamA.name;
-            betTeamBNameEl.textContent = teamB.name;
-            statsTeamAHeaderEl.textContent = getPlayerInitials(teamA.name); // Use team initials for headers
-            statsTeamBHeaderEl.textContent = getPlayerInitials(teamB.name);
+            teamANameEl.textContent = teamA?.name || '---';
+            teamBNameEl.textContent = teamB?.name || '---';
+            betTeamANameEl.textContent = teamA?.name || 'Team A';
+            betTeamBNameEl.textContent = teamB?.name || 'Team B';
+            statsTeamAHeaderEl.textContent = getPlayerInitials(teamA?.name || 'A');
+            statsTeamBHeaderEl.textContent = getPlayerInitials(teamB?.name || 'B');
             oddsAEl.textContent = parseFloat(oddsAVal || 0).toFixed(2);
             oddsBEl.textContent = parseFloat(oddsBVal || 0).toFixed(2);
         }
 
         function updateScoreAndTime(sA, sB, timeS) {
-            scoreAEl.textContent = sA ?? scoreAEl.textContent; // Use existing if null
+            scoreAEl.textContent = sA ?? scoreAEl.textContent;
             scoreBEl.textContent = sB ?? scoreBEl.textContent;
+            // Update stats table goals as well
+            goalsAEl.textContent = sA ?? goalsAEl.textContent;
+            goalsBEl.textContent = sB ?? goalsBEl.textContent;
             if (timeS !== undefined && timeS !== null) {
                  gameTimeEl.textContent = formatTime(timeS);
             }
         }
+
+         function updateStatsUI(statsData) {
+            // Simplified - assumes server sends { teamA: {shots, passes, goals}, teamB: {...} }
+            // More complex stats like possession would need calculation or server provision
+            if (!statsData) return;
+            if(statsData.teamA) {
+                shotsAEl.textContent = statsData.teamA.shots ?? shotsAEl.textContent;
+                passesAEl.textContent = statsData.teamA.passes ?? passesAEl.textContent;
+                goalsAEl.textContent = statsData.teamA.goals ?? goalsAEl.textContent; // Redundant with score update, but safe
+            }
+            if(statsData.teamB) {
+                shotsBEl.textContent = statsData.teamB.shots ?? shotsBEl.textContent;
+                passesBEl.textContent = statsData.teamB.passes ?? passesBEl.textContent;
+                goalsBEl.textContent = statsData.teamB.goals ?? goalsBEl.textContent;
+            }
+            // Basic possession estimation (example - needs real data from server ideally)
+            const totalPasses = (statsData.teamA?.passes || 0) + (statsData.teamB?.passes || 0);
+            if (totalPasses > 0) {
+                possessionAEl.textContent = Math.round(((statsData.teamA?.passes || 0) / totalPasses) * 100) + '%';
+                possessionBEl.textContent = Math.round(((statsData.teamB?.passes || 0) / totalPasses) * 100) + '%';
+            } else {
+                 possessionAEl.textContent = '--%';
+                 possessionBEl.textContent = '--%';
+            }
+         }
+
 
         function hideOverlays() {
             initialWaitOverlayEl.style.display = 'none';
@@ -372,147 +471,203 @@
         }
 
         function handleGameStateChange(newState, payload) {
-            hideOverlays(); // Hide all first
+            hideOverlays();
             clearTimeout(breakTimerInterval); // Stop previous timers
 
             currentGameState = newState; // Update local tracker
 
             let statusText = "";
-            let isBettingPeriod = false;
+            breakEndTime = payload?.breakEndTime; // Update break time from payload if present
 
             switch (newState) {
+                case 'INITIALIZING':
+                     statusText = "Connecting...";
+                    break;
                 case 'INITIAL_BETTING':
                     initialWaitOverlayEl.style.display = 'flex';
                     statusText = `Tournament Starting Soon! Betting open...`;
-                    breakEndTime = payload.breakEndTime;
-                    startBreakTimer(initialTimerDisplayEl, "First match starts in: ");
-                    isBettingPeriod = true;
+                    if (breakEndTime) startBreakTimer(initialTimerDisplayEl, "First match starts in: ");
+                    break;
+                case 'PRE_MATCH':
+                     statusText = `Preparing Next Match: ${teamANameEl.textContent} vs ${teamBNameEl.textContent}. Betting Open!`;
+                     // Overlay is hidden, betting handled by checkBettingStatus
                     break;
                 case 'FIRST_HALF':
                     statusText = `Match Running: ${teamANameEl.textContent} vs ${teamBNameEl.textContent} (1st Half)`;
-                     isBettingPeriod = false;
                     break;
                 case 'HALF_TIME':
                     halftimeOverlayEl.style.display = 'flex';
-                    statusText = `Half Time: ${teamANameEl.textContent} ${scoreAEl.textContent} - ${scoreBEl.textContent} ${teamBNameEl.textContent}`;
-                    breakEndTime = payload.breakEndTime;
-                    startBreakTimer(breakTimerDisplayEl, "2nd Half starts in: ");
-                     isBettingPeriod = false; // No betting during halftime break itself
+                    statusText = `Half Time: ${teamANameEl.textContent} ${scoreAEl.textContent}-${scoreBEl.textContent} ${teamBNameEl.textContent}`;
+                    if (breakEndTime) startBreakTimer(breakTimerDisplayEl, "2nd Half starts in: ");
                     break;
                 case 'SECOND_HALF':
                      statusText = `Match Running: ${teamANameEl.textContent} vs ${teamBNameEl.textContent} (2nd Half)`;
-                     isBettingPeriod = false;
                     break;
                 case 'FULL_TIME':
-                    fulltimeOverlayEl.style.display = 'flex';
-                    statusText = `Full Time: ${teamANameEl.textContent} ${scoreAEl.textContent} - ${scoreBEl.textContent} ${teamBNameEl.textContent}. Betting open for next match!`;
-                    breakEndTime = payload.breakEndTime;
-                    startBreakTimer(nextMatchTimerDisplayEl, "Next match starts in: ");
-                    isBettingPeriod = true; // Betting is open for the *next* match
-                    // Bets for *this* match are resolved by the server message handler for fullTime
-                    currentBet = null; // Clear local bet state as match ended
+                     fulltimeOverlayEl.style.display = 'flex';
+                     statusText = `Full Time: ${teamANameEl.textContent} ${scoreAEl.textContent}-${scoreBEl.textContent} ${teamBNameEl.textContent}. Betting open for next match!`;
+                     if (breakEndTime) startBreakTimer(nextMatchTimerDisplayEl, "Next match starts in: ");
                     break;
-                case 'PRE_MATCH': // State between fulltime break and match start
-                case 'BETWEEN_GAMES': // Similar transitional state
-                    statusText = `Preparing Next Match: ${teamANameEl.textContent} vs ${teamBNameEl.textContent}. Betting Open!`;
-                    isBettingPeriod = true;
+                 case 'BETWEEN_GAMES': // Server might use this briefly
+                    statusText = `Preparing Next Match... Betting Open!`;
                     break;
                  default:
-                    statusText = "Waiting for server...";
+                    statusText = "Waiting for server update...";
             }
             gameStatusMessageEl.textContent = statusText;
-            checkBettingStatus(); // Update betting buttons based on new state
         }
 
-         function startBreakTimer(displayElement, prefix) {
-            clearTimeout(breakTimerInterval); // Ensure no duplicates
+        function startBreakTimer(displayElement, prefix) {
+            clearTimeout(breakTimerInterval);
 
             const updateTimer = () => {
+                if (!breakEndTime) { // Stop if breakEndTime becomes null (e.g., state changed)
+                     displayElement.textContent = prefix + "00:00";
+                    return;
+                }
                 const now = Date.now();
-                const timeLeftS = Math.max(0, Math.ceil((breakEndTime - now) / 1000));
+                const timeLeftS = Math.max(0, Math.floor((breakEndTime - now) / 1000));
                 const mins = Math.floor(timeLeftS / 60);
                 const secs = timeLeftS % 60;
                 displayElement.textContent = `${prefix}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
                 if (timeLeftS > 0) {
-                    breakTimerInterval = setTimeout(updateTimer, 1000); // Schedule next update
+                    // Adjust timeout interval slightly to align better with seconds boundary
+                    const msToNextSecond = 1000 - (Date.now() % 1000);
+                    breakTimerInterval = setTimeout(updateTimer, msToNextSecond);
                 } else {
-                    // Timer finished, overlay should be hidden by the next game state message handler
+                    // Timer finished naturally
+                    displayElement.textContent = prefix + "00:00";
+                    // Overlays should be hidden by subsequent game state messages from server
                 }
             };
-            updateTimer(); // Start the timer immediately
+            updateTimer(); // Start immediately
         }
 
-        // --- Drawing Functions (Client-side - use local copies of players/ball) ---
-        // These functions remain largely the same as the last single-file version
-        // but operate on the 'players' and 'ball' variables updated by the server messages.
-        function drawField() { /* ... Copy drawField ... */ ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2); ctx.beginPath(); ctx.moveTo(canvas.width / 2, 0); ctx.lineTo(canvas.width / 2, canvas.height); ctx.stroke(); ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, CENTER_CIRCLE_RADIUS * (canvas.width / FIELD_WIDTH), 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 5, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = 'rgba(200, 200, 200, 0.5)'; ctx.fillRect(0, (canvas.height - GOAL_WIDTH * (canvas.height / FIELD_HEIGHT)) / 2, GOAL_DEPTH * (canvas.width / FIELD_WIDTH), GOAL_WIDTH * (canvas.height / FIELD_HEIGHT)); ctx.fillRect(canvas.width - GOAL_DEPTH * (canvas.width / FIELD_WIDTH), (canvas.height - GOAL_WIDTH * (canvas.height / FIELD_HEIGHT)) / 2, GOAL_DEPTH * (canvas.width / FIELD_WIDTH), GOAL_WIDTH * (canvas.height / FIELD_HEIGHT)); const penaltyAreaWidth = 165 * (canvas.width / FIELD_WIDTH); const penaltyAreaHeight = 403 * (canvas.height / FIELD_HEIGHT); ctx.strokeRect(0, (canvas.height - penaltyAreaHeight) / 2, penaltyAreaWidth, penaltyAreaHeight); ctx.strokeRect(canvas.width - penaltyAreaWidth, (canvas.height - penaltyAreaHeight) / 2, penaltyAreaWidth, penaltyAreaHeight); }
-        function drawPlayer(player) { /* ... Copy drawPlayer (drawing initials below) ... */ const canvasX = player.x * (canvas.width / FIELD_WIDTH); const canvasY = player.y * (canvas.height / FIELD_HEIGHT); const canvasRadius = PLAYER_RADIUS * (canvas.width / FIELD_WIDTH); ctx.fillStyle = player.color; ctx.beginPath(); ctx.arc(canvasX, canvasY, canvasRadius, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.stroke(); ctx.fillStyle = player.textColor; ctx.font = `bold ${canvasRadius * 0.9}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(player.initials, canvasX, canvasY); ctx.fillStyle = '#333'; ctx.font = `${canvasRadius * 0.7}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(player.initials, canvasX, canvasY + canvasRadius + 2); }
-        function drawBall() { /* ... Copy drawBall ... */ const canvasX = ball.x * (canvas.width / FIELD_WIDTH); const canvasY = ball.y * (canvas.height / FIELD_HEIGHT); const canvasRadius = BALL_RADIUS * (canvas.width / FIELD_WIDTH); ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#000000'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(canvasX, canvasY, canvasRadius, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+        // --- Drawing Functions ---
+        function drawField() { ctx.fillStyle = '#2a8c3e'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2); ctx.beginPath(); ctx.moveTo(canvas.width / 2, 0); ctx.lineTo(canvas.width / 2, canvas.height); ctx.stroke(); ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, CENTER_CIRCLE_RADIUS * (canvas.width / FIELD_WIDTH), 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 5 * (canvas.width / FIELD_WIDTH) , 0, Math.PI*2); ctx.fill(); const goalDrawWidth = GOAL_WIDTH * (canvas.height / FIELD_HEIGHT); const goalDrawDepth = GOAL_DEPTH * (canvas.width / FIELD_WIDTH); ctx.fillStyle = 'rgba(200, 200, 200, 0.2)'; ctx.fillRect(0, (canvas.height - goalDrawWidth) / 2, goalDrawDepth, goalDrawWidth); ctx.fillRect(canvas.width - goalDrawDepth, (canvas.height - goalDrawWidth) / 2, goalDrawDepth, goalDrawWidth); ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; const penaltyAreaWidth = 165 * (canvas.width / FIELD_WIDTH); const penaltyAreaHeight = 403 * (canvas.height / FIELD_HEIGHT); ctx.strokeRect(0, (canvas.height - penaltyAreaHeight) / 2, penaltyAreaWidth, penaltyAreaHeight); ctx.strokeRect(canvas.width - penaltyAreaWidth, (canvas.height - penaltyAreaHeight) / 2, penaltyAreaWidth, penaltyAreaHeight); }
+        function drawPlayer(player) {
+            const canvasX = player.x * (canvas.width / FIELD_WIDTH);
+            const canvasY = player.y * (canvas.height / FIELD_HEIGHT);
+            const canvasRadius = PLAYER_RADIUS * (canvas.width / FIELD_WIDTH);
+            // Player Circle
+            ctx.fillStyle = player.color || '#CCCCCC'; // Default color if missing
+            ctx.beginPath();
+            ctx.arc(canvasX, canvasY, canvasRadius, 0, Math.PI * 2);
+            ctx.fill();
+            // Outline
+            ctx.strokeStyle = ball.ownerId === player.id ? '#FFFF00' : '#000000'; // Highlight if has ball
+            ctx.lineWidth = ball.ownerId === player.id ? 2 : 1;
+            ctx.stroke();
+             // Initials Inside Circle
+             ctx.fillStyle = player.textColor || '#000000'; // Use provided textColor
+             ctx.font = `bold ${canvasRadius * 0.8}px sans-serif`; // Slightly smaller font
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             ctx.fillText(player.initials || 'P?', canvasX, canvasY);
+             // Player Name Below (Optional - can clutter)
+             // ctx.fillStyle = '#333';
+             // ctx.font = `${canvasRadius * 0.6}px sans-serif`;
+             // ctx.textAlign = 'center';
+             // ctx.textBaseline = 'top'; // Position below circle
+             // ctx.fillText(player.name || 'Unknown', canvasX, canvasY + canvasRadius + 2);
+        }
+        function drawBall() {
+            const canvasX = ball.x * (canvas.width / FIELD_WIDTH);
+            const canvasY = ball.y * (canvas.height / FIELD_HEIGHT);
+            const canvasRadius = BALL_RADIUS * (canvas.width / FIELD_WIDTH);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(canvasX, canvasY, Math.max(2, canvasRadius), 0, Math.PI * 2); // Ensure minimum visible size
+            ctx.fill();
+            ctx.stroke();
+        }
         function drawGame() {
-            if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-                canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+            // Ensure canvas dimensions match CSS dimensions for correct scaling
+             const currentWidth = canvas.clientWidth;
+             const currentHeight = canvas.clientHeight;
+            if (canvas.width !== currentWidth || canvas.height !== currentHeight) {
+                canvas.width = currentWidth;
+                canvas.height = currentHeight;
+                 console.log("Canvas resized to:", canvas.width, canvas.height);
             }
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawField();
-            // Only draw if players array has data
+
             if (players && players.length > 0) {
                 players.forEach(drawPlayer);
-                drawBall(); // Assumes ball object exists
+            }
+             // Always draw the ball, even if players aren't present yet
+            if (ball) {
+                 drawBall();
             }
         }
 
         // --- Client Rendering Loop ---
         function mainLoop() {
-            drawGame(); // Draw based on latest data received from server
+            drawGame(); // Draw based on latest received state (players, ball)
             animationFrameId = requestAnimationFrame(mainLoop);
         }
-        function startRendering() { if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(mainLoop); }
-        function stopRendering() { if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+        function startRendering() { if (!animationFrameId) { animationFrameId = requestAnimationFrame(mainLoop); } }
+        function stopRendering() { if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; } }
 
         // --- Utility Functions (Client-side) ---
-        function formatTime(ingameSeconds) { const minutes = Math.floor(ingameSeconds / 60); const seconds = Math.floor(ingameSeconds % 60); return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }
-        function addChatMessage(sender, message) { const messageEl = document.createElement('div'); messageEl.innerHTML = `<strong>${sender}:</strong> `; const textNode = document.createTextNode(message); messageEl.appendChild(textNode); chatBoxEl.appendChild(messageEl); chatBoxEl.scrollTop = chatBoxEl.scrollHeight; }
+        function formatTime(ingameSeconds) { const totalSeconds = Math.max(0, Math.floor(ingameSeconds)); const minutes = Math.floor(totalSeconds / 60); const seconds = totalSeconds % 60; return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }
+        function addChatMessage(sender, message) { const messageEl = document.createElement('div'); // Sanitize sender and message - basic example
+             const safeSender = sender.replace(/</g, "&lt;").replace(/>/g, "&gt;"); const safeMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;"); messageEl.innerHTML = `<strong>${safeSender}:</strong> ${safeMessage}`; chatBoxEl.appendChild(messageEl); chatBoxEl.scrollTop = chatBoxEl.scrollHeight; }
         function setBetMessage(message, isError = false) { betMessageEl.textContent = message; betMessageEl.className = `bet-message ${isError ? 'bet-error' : ''}`; }
-        function getPlayerInitials(name) { /* ... Copy from previous version ... */ if (!name || typeof name !== 'string') return '??'; const parts = name.split(' '); if (parts.length >= 2) { return parts[0][0] + parts[parts.length - 1][0]; } else if (parts.length === 1 && name.length > 0) { return name.substring(0, 2).toUpperCase(); } return '??'; }
+        function getPlayerInitials(name) { if (!name || typeof name !== 'string') return '??'; const parts = name.trim().split(' '); if (parts.length >= 2) { return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase(); } else if (parts.length === 1 && name.length > 0) { return name.substring(0, Math.min(2, name.length)).toUpperCase(); } return '??'; }
 
-        function disableInteraction() {
-            chatInputEl.disabled = true; sendChatBtn.disabled = true;
-            betAmountInputEl.disabled = true; betButtonAEl.disabled = true; betButtonBEl.disabled = true;
-            chatInputEl.placeholder = "Disconnected";
-            if (!userNickname) setBetMessage("Disconnected. Refresh page.", true);
+        function disableInteraction(reason = "Disabled") {
+            chatInputEl.disabled = true;
+            sendChatBtn.disabled = true;
+            chatInputEl.placeholder = reason;
+            disableBetting(reason); // Use the betting disable function
         }
+         function disableBetting(message) {
+             betAmountInputEl.disabled = true;
+             betButtonAEl.disabled = true;
+             betButtonBEl.disabled = true;
+             setBetMessage(message, true); // Show the reason as an error/status
+         }
 
-         // Central function to check and set betting button states
         function checkBettingStatus() {
-             const isBettingPeriod = (currentGameState === 'INITIAL_BETTING' || currentGameState === 'FULL_TIME' || currentGameState === 'PRE_MATCH' || currentGameState === 'BETWEEN_GAMES');
+             const isBettingPeriod = (
+                 currentGameState === 'INITIAL_BETTING' ||
+                 currentGameState === 'FULL_TIME' ||
+                 currentGameState === 'PRE_MATCH' || // Added PRE_MATCH
+                 currentGameState === 'BETWEEN_GAMES'
+             );
 
             if (!userNickname) {
                 disableBetting("Enter nickname to bet.");
                 return;
             }
-            if (currentBet) { // User has an active bet for this upcoming match
-                const betOnTeamName = currentBet.team === 'A' ? betTeamANameEl.textContent : betTeamBNameEl.textContent;
-                disableBetting(`Bet placed: $${currentBet.amount} on ${betOnTeamName}.`);
-                return;
-            }
-             if (userBalance <= 0) {
-                 disableBetting("Balance is $0. Cannot place bets.");
+
+             if (currentBet) {
+                 const betOnTeamName = currentBet.team === 'A' ? (betTeamANameEl.textContent || 'Team A') : (betTeamBNameEl.textContent || 'Team B');
+                 disableBetting(`Bet placed: $${currentBet.amount} on ${betOnTeamName}.`);
                  return;
              }
+
+             if (userBalance <= 0) {
+                 disableBetting("Balance is $0.00. Cannot place bets.");
+                 return;
+             }
+
              if (isBettingPeriod) {
                  betButtonAEl.disabled = false;
                  betButtonBEl.disabled = false;
                  betAmountInputEl.disabled = false;
-                 setBetMessage("Betting is open!");
+                 setBetMessage("Betting is open!", false); // Not an error
              } else {
                  disableBetting("Betting is closed.");
              }
          }
-         function checkBettingStatusOnWelcome() {
-             // Called specifically after nickname confirmed ('welcome' message)
-             checkBettingStatus(); // Run the general check
-         }
+
 
         // --- Initialization (Client-side) ---
         function init() {
@@ -522,10 +677,10 @@
              // Setup button listeners
              submitNicknameBtn.addEventListener('click', () => {
                  const nick = nicknameInputEl.value.trim();
-                 if (nick) {
+                 if (nick && nick.length > 0 && nick.length <= 15) {
                      sendMessage('setNickname', nick);
                  } else {
-                     alert("Please enter a valid nickname.");
+                     alert("Please enter a valid nickname (1-15 characters).");
                  }
              });
              nicknameInputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitNicknameBtn.click(); });
@@ -537,14 +692,13 @@
                      chatInputEl.value = '';
                  }
              });
-             chatInputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChatBtn.click(); });
+             chatInputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !sendChatBtn.disabled) sendChatBtn.click(); });
 
              betButtonAEl.addEventListener('click', () => {
                  const amount = parseInt(betAmountInputEl.value, 10);
                  if (!isNaN(amount) && amount > 0) {
+                     disableBetting("Placing bet..."); // Disable immediately
                      sendMessage('placeBet', { team: 'A', amount: amount });
-                     // Disable buttons immediately, wait for server confirmation/error
-                     disableBetting("Placing bet...");
                  } else {
                      setBetMessage("Invalid bet amount.", true);
                  }
@@ -552,23 +706,20 @@
              betButtonBEl.addEventListener('click', () => {
                   const amount = parseInt(betAmountInputEl.value, 10);
                  if (!isNaN(amount) && amount > 0) {
+                      disableBetting("Placing bet..."); // Disable immediately
                      sendMessage('placeBet', { team: 'B', amount: amount });
-                     disableBetting("Placing bet...");
                  } else {
                       setBetMessage("Invalid bet amount.", true);
                  }
              });
 
              // Initial UI state
-             disableInteraction(); // Keep disabled until connected AND nickname set
-             setBetMessage("Enter nickname to bet.");
+             disableInteraction("Connecting...");
              userBalanceEl.textContent = '---';
 
-            // Draw the static field initially
-            canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+            // Draw the static field initially (will resize on first drawGame)
             drawField();
 
-            // Start rendering loop (will draw empty field until state received)
             startRendering();
             console.log("Client init complete.");
         }
