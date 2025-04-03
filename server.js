@@ -173,7 +173,44 @@ function sendToClient(ws, data) { const clientData = clients.get(ws); if (ws.rea
 function createPlayer(id, teamId, role, formationPos, teamColor, textColor, playerName, playerIndex) { const initials = getPlayerInitials(playerName, playerIndex); const finalTextColor = textColor || (isColorDark(teamColor) ? '#FFFFFF' : '#000000'); return { id: `${teamId}-${id}`, team: teamId, role: role, name: playerName || `Player ${playerIndex + 1}`, initials: initials, x: formationPos.x, y: formationPos.y, vx: 0, vy: 0, baseX: formationPos.x, baseY: formationPos.y, targetX: formationPos.x, targetY: formationPos.y, hasBall: false, kickCooldown: 0, state: 'IDLE', color: teamColor, textColor: finalTextColor }; }
 const formation433 = (teamId) => { const sideMultiplier = teamId === 'A' ? 1 : -1; const xOffset = FIELD_WIDTH / 2; const yOffset = FIELD_HEIGHT / 2; const gkX = sideMultiplier * (-FIELD_WIDTH * 0.48); const defLineX = sideMultiplier * (-FIELD_WIDTH * DEFENSIVE_LINE_X_FACTOR); const midLineX = sideMultiplier * (-FIELD_WIDTH * MIDFIELD_LINE_X_FACTOR); const fwdLineX = sideMultiplier * (FIELD_WIDTH * FORWARD_LINE_X_FACTOR); const positions = [ { role: 'GK', x: gkX, y: 0 }, { role: 'DEF', x: defLineX, y: -FIELD_HEIGHT * 0.3 }, { role: 'DEF', x: defLineX + sideMultiplier * (-20), y: -FIELD_HEIGHT * 0.1 }, { role: 'DEF', x: defLineX + sideMultiplier * (-20), y: FIELD_HEIGHT * 0.1 }, { role: 'DEF', x: defLineX, y: FIELD_HEIGHT * 0.3 }, { role: 'MID', x: midLineX, y: -FIELD_HEIGHT * 0.2 }, { role: 'MID', x: midLineX + sideMultiplier * (20), y: 0 }, { role: 'MID', x: midLineX, y: FIELD_HEIGHT * 0.2 }, { role: 'FWD', x: fwdLineX, y: -FIELD_HEIGHT * 0.3 }, { role: 'FWD', x: fwdLineX + sideMultiplier * (30), y: 0 }, { role: 'FWD', x: fwdLineX, y: FIELD_HEIGHT * 0.3 } ]; return positions.map(p => ({ ...p, x: xOffset + p.x, y: yOffset + p.y })); };
 function setupTeams(teamDataA, teamDataB) { logDebug(`Setting up match: ${teamDataA?.name || '?'} vs ${teamDataB?.name || '?'}`); if (!teamDataA || !teamDataB) { console.error("Cannot setup teams, invalid team data provided."); return false; } teamA = { ...teamDataA, id: 'A', squad: sampleSquads[teamDataA.name] || Array(11).fill(null) }; teamB = { ...teamDataB, id: 'B', squad: sampleSquads[teamDataB.name] || Array(11).fill(null) }; players = []; const formationA = formation433('A'); const formationB = formation433('B'); for (let i = 0; i < 11; i++) { const nameA = teamA.squad[i]; const nameB = teamB.squad[i]; players.push(createPlayer(i, 'A', formationA[i].role, { x: formationA[i].x, y: formationA[i].y }, teamA.color, teamA.textColor, nameA, i)); players.push(createPlayer(i, 'B', formationB[i].role, { x: formationB[i].x, y: formationB[i].y }, teamB.color, teamB.textColor, nameB, i)); } scoreA = 0; scoreB = 0; resetStats(); generateOdds(); // Generate odds for the NEWLY set up teams clients.forEach(clientData => { clientData.currentBet = null; }); logDebug(`Teams setup complete. Odds: A=${oddsA}, B=${oddsB}. Bets cleared.`); return true; }
-function resetPositions(kickingTeamId = null) { logDebug("Resetting positions..."); ball.x = FIELD_WIDTH / 2; ball.y = FIELD_HEIGHT / 2; ball.vx = 0; ball.vy = 0; ball.ownerId = null; players.forEach(p => { p.vx = 0; p.vy = 0; p.hasBall = false; p.state = 'IDLE'; p.targetX = p.baseX; p.targetY = p.baseY; if (kickingTeamId) { // Position for kickoff if (p.team === kickingTeamId) { // Kicking team closer to ball if (p.role === 'FWD' || p.role === 'MID') { // Example: Central forward/mid starts near ball if (p.initials === getPlayerInitials(p.name, 9) || p.initials === getPlayerInitials(p.name, 6) ) { // Identify a central player approx p.x = FIELD_WIDTH / 2 - (p.team === 'A' ? PLAYER_RADIUS : -PLAYER_RADIUS) * 1.1; p.y = FIELD_HEIGHT / 2 + (Math.random() - 0.5) * 20; } else { // Other attackers spread out p.x = FIELD_WIDTH / 2 - (p.team === 'A' ? FIELD_WIDTH * 0.1 : -FIELD_WIDTH * 0.1); p.y = p.baseY + (Math.random() - 0.5) * 50; } } else { // Defenders stay back p.x = p.baseX; p.y = p.baseY; } } else { // Non-kicking team outside center circle p.x = p.baseX; if (p.team === 'A' && p.x > FIELD_WIDTH / 2 - CENTER_CIRCLE_RADIUS) { p.x = FIELD_WIDTH / 2 - CENTER_CIRCLE_RADIUS - PLAYER_RADIUS * 2; } else if (p.team === 'B' && p.x < FIELD_WIDTH / 2 + CENTER_CIRCLE_RADIUS) { p.x = FIELD_WIDTH / 2 + CENTER_CIRCLE_RADIUS + PLAYER_RADIUS * 2; } p.y = p.baseY; } // Ensure all players are within bounds p.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p.x)); p.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p.y)); } else { // Reset to base formation (e.g., after goal) p.x = p.baseX; p.y = p.baseY; } }); }
+function resetPositions(kickingTeamId = null) {
+    logDebug("Resetting positions..."); // Using double quotes consistently now
+    ball.x = FIELD_WIDTH / 2; ball.y = FIELD_HEIGHT / 2; ball.vx = 0; ball.vy = 0; ball.ownerId = null;
+    players.forEach(p => {
+        p.vx = 0; p.vy = 0; p.hasBall = false; p.state = 'IDLE';
+        p.targetX = p.baseX; p.targetY = p.baseY;
+        if (kickingTeamId) { // Position for kickoff
+            if (p.team === kickingTeamId) { // Kicking team closer to ball
+                 if (p.role === 'FWD' || p.role === 'MID') { // Example: Central forward/mid starts near ball
+                     if (p.initials === getPlayerInitials(p.name, 9) || p.initials === getPlayerInitials(p.name, 6) ) { // Identify a central player approx
+                         p.x = FIELD_WIDTH / 2 - (p.team === 'A' ? PLAYER_RADIUS : -PLAYER_RADIUS) * 1.1;
+                         p.y = FIELD_HEIGHT / 2 + (Math.random() - 0.5) * 20;
+                     } else { // Other attackers spread out
+                         p.x = FIELD_WIDTH / 2 - (p.team === 'A' ? FIELD_WIDTH * 0.1 : -FIELD_WIDTH * 0.1);
+                         p.y = p.baseY + (Math.random() - 0.5) * 50;
+                     }
+                 } else { // Defenders stay back
+                     p.x = p.baseX;
+                     p.y = p.baseY;
+                 }
+            } else { // Non-kicking team outside center circle
+                p.x = p.baseX;
+                if (p.team === 'A' && p.x > FIELD_WIDTH / 2 - CENTER_CIRCLE_RADIUS) {
+                    p.x = FIELD_WIDTH / 2 - CENTER_CIRCLE_RADIUS - PLAYER_RADIUS * 2;
+                } else if (p.team === 'B' && p.x < FIELD_WIDTH / 2 + CENTER_CIRCLE_RADIUS) {
+                    p.x = FIELD_WIDTH / 2 + CENTER_CIRCLE_RADIUS + PLAYER_RADIUS * 2;
+                }
+                p.y = p.baseY;
+            }
+            // Ensure all players are within bounds
+            p.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p.x));
+            p.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p.y));
+        } else { // Reset to base formation (e.g., after goal)
+            p.x = p.baseX;
+            p.y = p.baseY;
+        }
+    });
+}
 function resetStats() { stats = { teamA: { shots: 0, passes: 0, goals: 0 }, teamB: { shots: 0, passes: 0, goals: 0 } }; }
 function getPlayerById(playerId) { return players.find(p => p.id === playerId); }
 
@@ -879,9 +916,40 @@ function updateGame() {
 } // End of updateGame
 
 // --- Game Flow Control ---
-function startMatch() { logDebug(`[State Transition] Starting Match: ${teamA?.name} vs ${teamB?.name}`); if (!teamA || !teamB || players.length !== 22) { console.error("Cannot start match, teams/players not set up correctly. Restarting sequence."); startInitialSequence(); return; } if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; resetPositions('A'); // Team A always kicks off first half resetStats(); // Stats should be reset by setupTeams, but ensure here. scoreA = 0; scoreB = 0; serverGameTime = 0; halfStartTimeStamp = Date.now(); gameState = 'FIRST_HALF'; broadcast({ type: 'matchStart', payload: { teamA, teamB, oddsA, oddsB } }); gameLogicInterval = setInterval(updateGame, MILLISECONDS_PER_UPDATE); logDebug("Game logic interval started for First Half."); }
+function startMatch() {
+    // Use standard quotes for consistency
+    logDebug("[State Transition] Starting Match: " + (teamA?.name || 'Team A') + " vs " + (teamB?.name || 'Team B'));
+    if (!teamA || !teamB || players.length !== 22) {
+        console.error("Cannot start match, teams/players not set up correctly. Restarting sequence.");
+        startInitialSequence(); return;
+    }
+    if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null;
+    if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null;
+    resetPositions('A'); // Team A always kicks off first half
+    // resetStats(); // Stats should be reset by setupTeams, but ensure here.
+    scoreA = 0; scoreB = 0;
+    serverGameTime = 0;
+    halfStartTimeStamp = Date.now();
+    gameState = 'FIRST_HALF';
+    broadcast({ type: 'matchStart', payload: { teamA, teamB, oddsA, oddsB } });
+    gameLogicInterval = setInterval(updateGame, MILLISECONDS_PER_UPDATE);
+    logDebug("Game logic interval started for First Half."); // Using double quotes
+}
 function handleHalfTime() { logDebug("[State Transition] Handling Half Time"); if (gameState !== 'FIRST_HALF') { logDebug("Warning: Tried to handle halftime but not in first half state:", gameState); return; } if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; gameState = 'HALF_TIME'; serverGameTime = 45 * 60; breakEndTime = Date.now() + HALF_TIME_BREAK_MS; broadcast({ type: 'halfTime', payload: { scoreA, scoreB, breakEndTime } }); breakTimerTimeout = setTimeout(startSecondHalf, HALF_TIME_BREAK_MS); logDebug(`Halftime break. Second half starts at ${new Date(breakEndTime).toLocaleTimeString()}`); }
-function startSecondHalf() { logDebug("[State Transition] Starting Second Half"); if (gameState !== 'HALF_TIME') { logDebug("Warning: Tried to start second half but not in halftime state:", gameState); return; } if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; resetPositions('B'); // Team B kicks off second half halfStartTimeStamp = Date.now(); gameState = 'SECOND_HALF'; broadcast({ type: 'secondHalfStart' }); gameLogicInterval = setInterval(updateGame, MILLISECONDS_PER_UPDATE); logDebug("Game logic interval started for Second Half."); }
+function startSecondHalf() {
+    logDebug("[State Transition] Starting Second Half"); // Using double quotes
+    if (gameState !== 'HALF_TIME') {
+        logDebug("Warning: Tried to start second half but not in halftime state:", gameState); return;
+    }
+    if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null;
+    if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null;
+    resetPositions('B'); // Team B kicks off second half
+    halfStartTimeStamp = Date.now();
+    gameState = 'SECOND_HALF';
+    broadcast({ type: 'secondHalfStart' });
+    gameLogicInterval = setInterval(updateGame, MILLISECONDS_PER_UPDATE);
+    logDebug("Game logic interval started for Second Half."); // Using double quotes
+}
 
 // REVISED: prepareNextMatchDetails
 function prepareNextMatchDetails() {
