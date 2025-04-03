@@ -490,8 +490,14 @@ function calculateCurrentDisplayTime() { if (gameState === 'FIRST_HALF') { retur
 
 // --- Server Start ---
 // ... (Unchanged) ...
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => { console.log(`HTTP and WebSocket server listening on port ${PORT}`); startInitialSequence(); });
+const PORT = process.env.PORT || 10000; // Render provides PORT, default 10000
+const HOST = '0.0.0.0'; // <<< ADD THIS LINE
+
+server.listen(PORT, HOST, () => { // <<< ADD HOST HERE
+    // Update log message for clarity
+    console.log(`HTTP and WebSocket server listening on ${HOST}:${PORT}`);
+    startInitialSequence(); // Start the game sequence
+});
 
 // --- Graceful Shutdown ---
 // ... (Unchanged) ...
