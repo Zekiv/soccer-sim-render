@@ -181,8 +181,10 @@ function getPlayerById(playerId) { return players.find(p => p.id === playerId); 
 function findClosestTeammate(player) { let closestMate = null; let minDistSq = Infinity; players.forEach(p => { if (p.team === player.team && p !== player) { const dSq = distSq(player.x, player.y, p.x, p.y); if (dSq < minDistSq) { minDistSq = dSq; closestMate = p; } } }); return { teammate: closestMate, distSq: minDistSq }; }
 function findClosestOpponent(player) { let closestOpp = null; let minDistSq = Infinity; players.forEach(p => { if (p.team !== player.team) { const dSq = distSq(player.x, player.y, p.x, p.y); if (dSq < minDistSq) { minDistSq = dSq; closestOpp = p; } } }); return { opponent: closestOpp, distSq: minDistSq }; }
 
-// ** REVISED AI FUNCTION **
+// ** updatePlayerAI - BODY COMMENTED OUT FOR TESTING **
 function updatePlayerAI(player) {
+    // -- START OF COMMENTED OUT BLOCK --
+    /*
     if (!player || !ball) return;
 
     const goalX = player.team === 'A' ? FIELD_WIDTH : 0;
@@ -594,6 +596,16 @@ function updatePlayerAI(player) {
         player.targetY = player.baseY;
         movePlayerTowardsTarget(player, PLAYER_SPEED * 0.8);
     }
+    */
+    // -- END OF COMMENTED OUT BLOCK --
+
+    // Simple fallback if AI is commented out
+     if (!player.state || player.state === 'IDLE') {
+         player.targetX = player.baseX;
+         player.targetY = player.baseY;
+         movePlayerTowardsTarget(player, PLAYER_SPEED * 0.5);
+     }
+
 } // End of updatePlayerAI function
 
 function movePlayerTowardsTarget(player, speed = PLAYER_SPEED) { const dx = player.targetX - player.x; const dy = player.targetY - player.y; const dist = Math.sqrt(dx * dx + dy * dy); if (dist > speed) { const angle = Math.atan2(dy, dx); player.vx = Math.cos(angle) * speed; player.vy = Math.sin(angle) * speed; } else if (dist > 1){ player.vx = dx; player.vy = dy; } else { player.vx = 0; player.vy = 0; } }
@@ -838,8 +850,9 @@ function updateGame() {
     if (gameState !== 'FIRST_HALF' && gameState !== 'SECOND_HALF') return;
     const startTime = Date.now();
     try {
-        players.forEach(updatePlayerAI);
-        players.forEach(updatePlayerPosition);
+        // AI is commented out, so just move players/ball naively
+        // players.forEach(updatePlayerAI); // <<<< COMMENTED OUT
+        players.forEach(updatePlayerPosition); // Still need to update positions based on velocity
         updateBallPhysics();
     } catch (error) {
         console.error("Error during game update logic:", error);
