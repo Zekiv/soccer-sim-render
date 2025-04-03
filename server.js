@@ -174,10 +174,50 @@ function sendToClient(ws, data) { const clientData = clients.get(ws); if (ws.rea
 
 // --- Player & Team Setup ---
 // ... (createPlayer, formation433, setupTeams, resetPositions, resetStats, getPlayerById - largely unchanged) ...
-function createPlayer(id, teamId, role, formationPos, teamColor, textColor, playerName, playerIndex) { /* ... unchanged ... */ const initials = getPlayerInitials(playerName, playerIndex); const finalTextColor = textColor || (isColorDark(teamColor) ? '#FFFFFF' : '#000000'); return { id: `${teamId}-${id}`, team: teamId, role: role, name: playerName || `Player ${playerIndex + 1}`, initials: initials, x: formationPos.x, y: formationPos.y, vx: 0, vy: 0, baseX: formationPos.x, baseY: formationPos.y, targetX: formationPos.x, targetY: formationPos.y, state: 'IDLE', kickCooldown: 0, color: teamColor, textColor: finalTextColor, hasBall: false }; }
+function createPlayer(id, teamId, role, formationPos, teamColor, textColor, playerName, playerIndex) { 
+    const initials = getPlayerInitials(playerName, playerIndex);
+    const finalTextColor = textColor || (isColorDark(teamColor) ? '#FFFFFF' : '#000000');
+    return {
+        // ... other properties ...
+        state: 'IDLE',
+        kickCooldown: 0, color: teamColor, textColor: finalTextColor,
+        hasBall: false,
+        dribbleTicks: 0 // <<< ADD THIS: Track consecutive ticks with ball
+    };
+}
 const formation433 = (teamId) => { /* ... unchanged ... */ const sideMultiplier = teamId === 'A' ? 1 : -1; const xOffset = FIELD_WIDTH / 2; const yOffset = FIELD_HEIGHT / 2; const gkX = sideMultiplier * (-FIELD_WIDTH * 0.48); const defLineX = sideMultiplier * (-FIELD_WIDTH * 0.35); const midLineX = sideMultiplier * (-FIELD_WIDTH * 0.1); const fwdLineX = sideMultiplier * (FIELD_WIDTH * 0.25); const positions = [ { role: 'GK', x: gkX, y: 0 }, { role: 'DEF', x: defLineX, y: -FIELD_HEIGHT * 0.3 }, { role: 'DEF', x: defLineX + sideMultiplier * (-20), y: -FIELD_HEIGHT * 0.1 }, { role: 'DEF', x: defLineX + sideMultiplier * (-20), y: FIELD_HEIGHT * 0.1 }, { role: 'DEF', x: defLineX, y: FIELD_HEIGHT * 0.3 }, { role: 'MID', x: midLineX, y: -FIELD_HEIGHT * 0.2 }, { role: 'MID', x: midLineX + sideMultiplier * (20), y: 0 }, { role: 'MID', x: midLineX, y: FIELD_HEIGHT * 0.2 }, { role: 'FWD', x: fwdLineX, y: -FIELD_HEIGHT * 0.3 }, { role: 'FWD', x: fwdLineX + sideMultiplier * (30), y: 0 }, { role: 'FWD', x: fwdLineX, y: FIELD_HEIGHT * 0.3 } ]; return positions.map(p => ({ ...p, x: xOffset + p.x, y: yOffset + p.y })); };
 function setupTeams(teamDataA, teamDataB) { /* ... unchanged ... */ logDebug(`Setting up match: ${teamDataA?.name || '?'} vs ${teamDataB?.name || '?'}`); if (!teamDataA || !teamDataB) { console.error("Cannot setup teams, invalid team data provided."); return false; } teamA = { ...teamDataA, id: 'A', squad: sampleSquads[teamDataA.name] || Array(11).fill(null) }; teamB = { ...teamDataB, id: 'B', squad: sampleSquads[teamDataB.name] || Array(11).fill(null) }; players = []; const formationA = formation433('A'); const formationB = formation433('B'); for (let i = 0; i < 11; i++) { const nameA = teamA.squad[i]; const nameB = teamB.squad[i]; players.push(createPlayer(i, 'A', formationA[i].role, { x: formationA[i].x, y: formationA[i].y }, teamA.color, teamA.textColor, nameA, i)); players.push(createPlayer(i, 'B', formationB[i].role, { x: formationB[i].x, y: formationB[i].y }, teamB.color, teamB.textColor, nameB, i)); } scoreA = 0; scoreB = 0; resetStats(); const generatedOdds = generateOdds(teamA.rating, teamB.rating); oddsA = generatedOdds.oddsA; oddsB = generatedOdds.oddsB; clients.forEach(clientData => { clientData.currentBet = null; }); logDebug(`Teams setup complete. Odds: A=${oddsA}, B=${oddsB}. Client bets cleared.`); return true; }
-function resetPositions(kickingTeamId = null) { /* ... unchanged kickoff positioning logic ... */ logDebug(`Resetting positions. Kicking team: ${kickingTeamId || 'None'}`); ball.x = FIELD_WIDTH / 2; ball.y = FIELD_HEIGHT / 2; ball.vx = 0; ball.vy = 0; ball.ownerId = null; let kickerFound = false; players.forEach(p => { p.vx = 0; p.vy = 0; p.hasBall = false; p.state = 'IDLE'; p.x = p.baseX; p.y = p.baseY; if (kickingTeamId) { if (p.team !== kickingTeamId) { if (p.team === 'A' && p.x > FIELD_WIDTH / 2 - PLAYER_RADIUS) { p.x = FIELD_WIDTH / 2 - PLAYER_RADIUS * 2; } else if (p.team === 'B' && p.x < FIELD_WIDTH / 2 + PLAYER_RADIUS) { p.x = FIELD_WIDTH / 2 + PLAYER_RADIUS * 2; } } else { if (p.team === 'A' && p.x > FIELD_WIDTH / 2 - PLAYER_RADIUS) { p.x = FIELD_WIDTH / 2 - PLAYER_RADIUS * 2; } else if (p.team === 'B' && p.x < FIELD_WIDTH / 2 + PLAYER_RADIUS) { p.x = FIELD_WIDTH / 2 + PLAYER_RADIUS * 2; } if (!kickerFound && (p.role === 'FWD' || p.role === 'MID') && Math.abs(p.y - FIELD_HEIGHT / 2) < FIELD_HEIGHT * 0.2) { p.x = FIELD_WIDTH / 2 - (p.team === 'A' ? PLAYER_RADIUS + BALL_RADIUS + 2 : - (PLAYER_RADIUS + BALL_RADIUS + 2)); p.y = FIELD_HEIGHT / 2; kickerFound = true; logDebug(`Designated kicker: ${p.id} (${p.name})`); } } } p.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p.x)); p.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p.y)); }); if (kickingTeamId && !kickerFound) { const fallbackKicker = players.find(p => p.team === kickingTeamId && (p.role === 'FWD' || p.role === 'MID')); if (fallbackKicker) { fallbackKicker.x = FIELD_WIDTH / 2 - (fallbackKicker.team === 'A' ? PLAYER_RADIUS + BALL_RADIUS + 2 : - (PLAYER_RADIUS + BALL_RADIUS + 2)); fallbackKicker.y = FIELD_HEIGHT / 2; logDebug(`Fallback designated kicker: ${fallbackKicker.id} (${fallbackKicker.name})`); } else { logDebug("Warning: Could not find any kicker for kickoff!"); } } }
+function resetPositions(kickingTeamId = null) { 
+    logDebug(`Resetting positions. Kicking team: ${kickingTeamId || 'None'}`);
+
+    // **Explicitly clear ball state FIRST**
+    ball.x = FIELD_WIDTH / 2; ball.y = FIELD_HEIGHT / 2;
+    ball.vx = 0; ball.vy = 0;
+    ball.ownerId = null;
+
+    let kickerFound = false;
+    players.forEach(p => {
+        // **Explicitly clear player ball state**
+        p.hasBall = false;
+        p.vx = 0; p.vy = 0;
+        p.state = 'IDLE';
+        // p.x = p.baseX; p.y = p.baseY; // Start at base, gets overwritten below
+
+        // ... (rest of the kickoff positioning logic remains the same) ...
+         if (kickingTeamId) {
+            // ... existing logic to position non-kickers and kickers ...
+         } else {
+             // Added for safety during non-kickoff resets (like halftime start?)
+              p.x = p.baseX;
+              p.y = p.baseY;
+         }
+
+         // Clamp positions just in case
+         p.x = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, p.x));
+         p.y = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, p.y));
+    });
+    // ... (rest of the kicker finding logic remains the same) ...
+}
 function resetStats() { /* ... unchanged ... */ stats = { teamA: { shots: 0, passes: 0, goals: 0 }, teamB: { shots: 0, passes: 0, goals: 0 } }; }
 function getPlayerById(playerId) { /* ... unchanged ... */ return players.find(p => p.id === playerId); }
 
@@ -306,48 +346,71 @@ function updatePlayerAI(player) {
 
     // --- 1. ON BALL ACTIONS ---
     if (hasPossession) {
+        player.dribbleTicks++; // Increment dribble counter
+
+        // **Dribbling Timeout Fail-safe**
+        // If dribbling for too long (e.g., ~5 seconds of game time), force an action
+        const MAX_DRIBBLE_TICKS = UPDATES_PER_SECOND * 5; // Adjust as needed
+        if (player.dribbleTicks > MAX_DRIBBLE_TICKS) {
+             logDebug(`FAILSAFE: ${player.id} stuck dribbling (${player.dribbleTicks} ticks). Forcing action.`);
+             // Try a simple forward pass or clear
+             let forceTargetX = player.team === 'A' ? player.x + 200 : player.x - 200;
+             let forceTargetY = player.y + (Math.random() - 0.5) * 100;
+             forceTargetX = Math.max(0, Math.min(FIELD_WIDTH, forceTargetX)); // Clamp target X
+             forceTargetY = Math.max(0, Math.min(FIELD_HEIGHT, forceTargetY));
+
+             if (player.kickCooldown <= 0) {
+                 // Force a medium-power pass/clear forward
+                 passBall(player, { x: forceTargetX, y: forceTargetY, id: 'FORCED_TARGET' }); // Pass towards a point
+                 stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++;
+                 player.kickCooldown = KICK_COOLDOWN_FRAMES;
+                 player.dribbleTicks = 0; // Reset counter
+                 return; // Action taken
+             }
+              // If still on cooldown, just hold ball, will try again next tick
+        }
+
+
         player.state = 'DRIBBLING'; // Default action
         const distToGoalSq = distSq(player.x, player.y, goalX, goalY);
         const isNearOwnGoal = distSq(player.x, player.y, ownGoalX, ownGoalY) < (FIELD_WIDTH * 0.3)**2;
 
         // Decision: Shoot?
         const shootRangeSq = (FIELD_WIDTH * 0.4)**2;
-        const shootProbability = isNearOwnGoal ? 0.01 : (0.1 + 0.4 * (1 - Math.sqrt(distToGoalSq) / (FIELD_WIDTH * 0.6))); // Higher chance closer to goal
+        const shootProbability = isNearOwnGoal ? 0.01 : (0.1 + 0.4 * (1 - Math.sqrt(distToGoalSq) / (FIELD_WIDTH * 0.6)));
         if (distToGoalSq < shootRangeSq && player.kickCooldown <= 0 && Math.random() < shootProbability) {
-            player.state = 'SHOOTING'; shootBall(player, goalX, goalY + (Math.random() - 0.5) * GOAL_WIDTH * 1.2); stats[player.team === 'A' ? 'teamA' : 'teamB'].shots++; player.kickCooldown = KICK_COOLDOWN_FRAMES; return;
+            player.state = 'SHOOTING'; shootBall(player, goalX, goalY + (Math.random() - 0.5) * GOAL_WIDTH * 1.2); stats[player.team === 'A' ? 'teamA' : 'teamB'].shots++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; // Reset counter on shoot
         }
 
         // Decision: Pass?
         let bestPassTarget = findBestPassOption(player);
         let passIsRisky = bestPassTarget ? isPassRisky(player, bestPassTarget) : true;
-        const passProbability = isNearOwnGoal ? 0.6 : (0.2 + (bestPassTarget ? 0.3 : -0.2) - (passIsRisky ? 0.2 : 0)); // Pass more near own goal, less if no good option or risky
+        const passProbability = isNearOwnGoal ? 0.6 : (0.2 + (bestPassTarget ? 0.3 : -0.2) - (passIsRisky ? 0.2 : 0));
         if (bestPassTarget && player.kickCooldown <= 0 && Math.random() < passProbability && !passIsRisky) {
-             player.state = 'PASSING'; passBall(player, bestPassTarget); stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++; player.kickCooldown = KICK_COOLDOWN_FRAMES; return;
+             player.state = 'PASSING'; passBall(player, bestPassTarget); stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; // Reset counter on pass
         }
 
-        // Decision: Dribble
-        // Find nearest opponent to potentially dribble away from
-        const [nearestOpponent] = findClosestPlayers(player.team === 'A' ? 'B' : 'A', player.x, player.y);
-        let targetX = goalX; // Default move towards goal
-        let targetY = goalY;
-        if (nearestOpponent && distSq(player.x, player.y, nearestOpponent.x, nearestOpponent.y) < (SUPPORT_DISTANCE_IDEAL * 0.8)**2) {
-             // Opponent is close, try to dribble away from them towards goal
-             const angleToOpp = Math.atan2(nearestOpponent.y - player.y, nearestOpponent.x - player.x);
-             const angleToGoal = Math.atan2(goalY - player.y, goalX - player.x);
-             // Aim roughly opposite the opponent, but biased towards goal
-             let dribbleAngle = angleToOpp + Math.PI + (angleToGoal - (angleToOpp + Math.PI)) * 0.5;
-             targetX = player.x + Math.cos(dribbleAngle) * 100; // Target point away from opponent
-             targetY = player.y + Math.sin(dribbleAngle) * 100;
-             logDebug(`${player.id} dribbling away from pressure (${nearestOpponent.id})`);
-        } else {
-             // No immediate pressure, dribble towards goal with slight variation
-              targetY += (Math.random() - 0.5) * FIELD_HEIGHT * 0.2;
-              logDebug(`${player.id} dribbling towards goal`);
-        }
-
+        // Decision: Dribble (if no pass/shoot)
+        // ... (existing dribble logic to find targetX/Y) ...
+         const [nearestOpponent] = findClosestPlayers(player.team === 'A' ? 'B' : 'A', player.x, player.y);
+         let targetX = goalX; let targetY = goalY;
+         if (nearestOpponent && distSq(player.x, player.y, nearestOpponent.x, nearestOpponent.y) < (SUPPORT_DISTANCE_IDEAL * 0.8)**2) {
+              const angleToOpp = Math.atan2(nearestOpponent.y - player.y, nearestOpponent.x - player.x);
+              const angleToGoal = Math.atan2(goalY - player.y, goalX - player.x);
+              let dribbleAngle = angleToOpp + Math.PI + (angleToGoal - (angleToOpp + Math.PI)) * 0.5;
+              targetX = player.x + Math.cos(dribbleAngle) * 100;
+              targetY = player.y + Math.sin(dribbleAngle) * 100;
+              // logDebug(`${player.id} dribbling away from pressure (${nearestOpponent.id})`);
+         } else {
+               targetY += (Math.random() - 0.5) * FIELD_HEIGHT * 0.2;
+               // logDebug(`${player.id} dribbling towards goal`);
+         }
         player.targetX = targetX; player.targetY = targetY;
-        movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * PLAYER_DRIBBLE_SPEED_FACTOR, true); // Dribbling is slower, updates ball pos
-        return;
+        movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * PLAYER_DRIBBLE_SPEED_FACTOR, true);
+        return; // Action taken (dribble)
+    } else {
+        // If player doesn't have possession, reset their dribble counter
+        player.dribbleTicks = 0;
     }
 
     // --- 2. OFF BALL ACTIONS (TEAM HAS POSSESSION) ---
