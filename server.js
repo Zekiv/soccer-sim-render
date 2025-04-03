@@ -11,7 +11,42 @@ function logDebug(...args) { /* ... (unchanged) ... */ }
 console.log("Starting server...");
 
 // --- HTTP Server Setup ---
-const server = http.createServer((req, res) => { /* ... (unchanged) ... */ });
+const server = http.createServer((req, res) => {
+    logDebug(`HTTP Request: ${req.method} ${req.url}`); // Add logging for HTTP requests
+
+    // 1. Handle root path ('/') for health checks - respond quickly
+    if (req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK'); // Simple, fast response for health checker
+        logDebug(`Responded OK to root path request`);
+    }
+    // 2. Handle request for the actual HTML file
+    else if (req.url === '/index.html') {
+        fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {
+            if (err) {
+                console.error("Error loading index.html:", err);
+                res.writeHead(500, { 'Content-Type': 'text/plain' });
+                res.end('Internal Server Error');
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(data);
+            logDebug(`Served index.html`);
+        });
+    }
+    // 3. Handle favicon (optional but good practice)
+    else if (req.url === '/favicon.ico') {
+         res.writeHead(204); // No Content
+         res.end();
+         logDebug(`Responded 204 to favicon request`);
+    }
+    // 4. Handle all other requests as Not Found
+    else {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not Found');
+        logDebug(`Responded 404 to ${req.url}`);
+    }
+});
 
 // --- WebSocket Server Setup ---
 const wss = new WebSocket.Server({ server });
