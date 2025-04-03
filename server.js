@@ -490,11 +490,19 @@ function calculateCurrentDisplayTime() { if (gameState === 'FIRST_HALF') { retur
 
 // --- Server Start ---
 // ... (Unchanged) ...
-const PORT = process.env.PORT || 10000; // Render provides PORT, default 10000
-const HOST = '0.0.0.0'; // <<< ADD THIS LINE
+const PORT = process.env.PORT; // <<< RELY ONLY ON RENDER'S VARIABLE
 
-server.listen(PORT, HOST, () => { // <<< ADD HOST HERE
-    // Update log message for clarity
+// Add a check to ensure Render provided the PORT variable
+if (!PORT) {
+  console.error("FATAL ERROR: PORT environment variable not set by Render. Exiting.");
+  // Exit the process immediately if the port isn't defined.
+  // This will make it very clear in the logs if Render failed to provide it.
+  process.exit(1);
+}
+
+const HOST = '0.0.0.0';
+
+server.listen(parseInt(PORT, 10), HOST, () => { // Use parseInt for safety
     console.log(`HTTP and WebSocket server listening on ${HOST}:${PORT}`);
     startInitialSequence(); // Start the game sequence
 });
