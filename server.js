@@ -35,7 +35,6 @@ console.log("WebSocket server attached to HTTP server.");
 const INITIAL_BETTING_WAIT_MINS = 0.3; const REAL_MATCH_DURATION_MINS = 1.5; const BETWEEN_MATCH_BREAK_MINS = 0.3; const HALF_TIME_BREAK_S = 10; const PRE_MATCH_DELAY_MS = 3000;
 const INITIAL_BETTING_WAIT_MS = INITIAL_BETTING_WAIT_MINS * 60 * 1000; const INGAME_MATCH_DURATION_MINS = 90; const REAL_HALF_DURATION_MS = (REAL_MATCH_DURATION_MINS / 2) * 60 * 1000; const HALF_TIME_BREAK_MS = HALF_TIME_BREAK_S * 1000; const BETWEEN_MATCH_BREAK_MS = BETWEEN_MATCH_BREAK_MINS * 60 * 1000; const UPDATES_PER_SECOND = 30; const MILLISECONDS_PER_UPDATE = 1000 / UPDATES_PER_SECOND; const GAME_SPEED_FACTOR = (INGAME_MATCH_DURATION_MINS * 60 * 1000) / (REAL_MATCH_DURATION_MINS * 60 * 1000);
 const FIELD_WIDTH = 1050; const FIELD_HEIGHT = 680; const GOAL_WIDTH = 120; const GOAL_DEPTH = 20; const CENTER_CIRCLE_RADIUS = 91.5; const PLAYER_RADIUS = 10; const BALL_RADIUS = 5; const PENALTY_AREA_WIDTH = 165; const PENALTY_AREA_HEIGHT = 403;
-// AI & Physics Tuning Constants
 const BASE_PLAYER_SPEED = 3.9; const PLAYER_SPRINT_MULTIPLIER = 1.5; const PLAYER_DRIBBLE_SPEED_FACTOR = 0.8; const GK_SPEED_FACTOR = 0.85; const BALL_MAX_SPEED = 17; const BALL_FRICTION = 0.975; const SHOT_POWER_BASE = 15; const SHOT_POWER_VARIANCE = 5; const PASS_POWER_FACTOR = 0.09; const PASS_MIN_POWER = 6; const KICK_RANGE = PLAYER_RADIUS + BALL_RADIUS + 5; const CONTROL_RANGE = PLAYER_RADIUS + BALL_RADIUS + 2; const KICK_COOLDOWN_FRAMES = 12; const SHOT_INACCURACY_FACTOR = 0.08; const PASS_INACCURACY_FACTOR = 0.06; const DRIBBLE_CONTROL_DISTANCE = PLAYER_RADIUS + BALL_RADIUS + 1; const CHASE_BALL_ANGLE_THRESHOLD = Math.PI / 1.5; const SUPPORT_DISTANCE_IDEAL = 120; const SUPPORT_DISTANCE_VARIANCE = 60; const DEFENSIVE_LINE_X_FACTOR = 0.3; const DEFENSIVE_MARKING_DISTANCE = 50; const PRESSING_DISTANCE_FWD = FIELD_WIDTH * 0.5; const PRESSING_DISTANCE_MID = FIELD_WIDTH * 0.65; const PRESSING_DISTANCE_DEF = FIELD_WIDTH * 0.8; const COLLISION_PUSH_FACTOR = 0.6; const MIN_COLLISION_SEPARATION = 0.1;
 
 // --- Team Data ---
@@ -83,85 +82,29 @@ function updatePlayerAI(player) {
     const oppPossession = ball.ownerId && getPlayerById(ball.ownerId)?.team !== player.team;
     const ballIsLoose = ball.ownerId === null;
 
-    const goalX = player.team === 'A' ? FIELD_WIDTH : 0;
-    const goalY = FIELD_HEIGHT / 2;
-    const ownGoalX = player.team === 'A' ? 0 : FIELD_WIDTH;
-    const ownGoalY = FIELD_HEIGHT / 2;
+    const goalX = player.team === 'A' ? FIELD_WIDTH : 0; const goalY = FIELD_HEIGHT / 2; const ownGoalX = player.team === 'A' ? 0 : FIELD_WIDTH; const ownGoalY = FIELD_HEIGHT / 2;
 
     if (player.role === 'GK') { const penaltyBoxTop = (FIELD_HEIGHT - PENALTY_AREA_HEIGHT) / 2; const penaltyBoxBottom = (FIELD_HEIGHT + PENALTY_AREA_HEIGHT) / 2; const penaltyBoxXNear = player.team === 'A' ? 0 : FIELD_WIDTH - PENALTY_AREA_WIDTH; const penaltyBoxXFar = player.team === 'A' ? PENALTY_AREA_WIDTH : FIELD_WIDTH; const sixYardBoxXFar = player.team === 'A' ? 55 : FIELD_WIDTH - 55; let targetX = player.baseX; let targetY = player.baseY; const ballDistToOwnGoalSq = distSq(ball.x, ball.y, ownGoalX, ownGoalY); const threatDistanceSq = (FIELD_WIDTH * 0.4) ** 2; if (ballDistToOwnGoalSq < threatDistanceSq || oppPossession) { player.state = 'GK_POSITIONING'; targetY = ownGoalY + (ball.y - ownGoalY) * 0.7; targetY = Math.max(penaltyBoxTop + PLAYER_RADIUS, Math.min(penaltyBoxBottom - PLAYER_RADIUS, targetY)); let depthFactor = Math.max(0, 1 - Math.sqrt(ballDistToOwnGoalSq) / (FIELD_WIDTH * 0.3)); targetX = ownGoalX + (player.team === 'A' ? 1 : -1) * (GOAL_DEPTH + PLAYER_RADIUS + (sixYardBoxXFar - (ownGoalX + GOAL_DEPTH)) * (1 - depthFactor) * 0.5); } else { player.state = 'IDLE'; targetX = player.baseX; targetY = player.baseY; } targetX = player.team === 'A' ? Math.max(PLAYER_RADIUS, Math.min(penaltyBoxXFar - PLAYER_RADIUS, targetX)) : Math.max(penaltyBoxXNear + PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, targetX)); player.targetX = targetX; player.targetY = targetY; movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * GK_SPEED_FACTOR); if (ballIsLoose && canControlBall && player.kickCooldown <= 0) { logDebug(`GK ${player.id} claiming loose ball`); gainPossession(player); player.kickCooldown = KICK_COOLDOWN_FRAMES * 2; let clearTargetX = player.team === 'A' ? FIELD_WIDTH * 0.4 : FIELD_WIDTH * 0.6; let clearTargetY = Math.random() < 0.5 ? FIELD_HEIGHT * 0.2 : FIELD_HEIGHT * 0.8; logDebug(`GK ${player.id} clearing towards ${clearTargetX.toFixed(0)}, ${clearTargetY.toFixed(0)}`); shootBall(player, clearTargetX, clearTargetY, SHOT_POWER_BASE * 0.8); stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++; return; } return; }
 
-    let nearestOpponent = null;
-    let nearestOpponentDistSq = Infinity;
-    if (players) { const [foundOpp] = findClosestPlayers(player.team === 'A' ? 'B' : 'A', player.x, player.y); if (foundOpp && !isNaN(foundOpp.x) && !isNaN(foundOpp.y)) { nearestOpponent = foundOpp; nearestOpponentDistSq = distSq(player.x, player.y, nearestOpponent.x, nearestOpponent.y); } }
-    const underPressure = nearestOpponent && nearestOpponentDistSq < (SUPPORT_DISTANCE_IDEAL * 0.8)**2;
+    let nearestOpponent = null; let nearestOpponentDistSq = Infinity; if (players) { const [foundOpp] = findClosestPlayers(player.team === 'A' ? 'B' : 'A', player.x, player.y); if (foundOpp && !isNaN(foundOpp.x) && !isNaN(foundOpp.y)) { nearestOpponent = foundOpp; nearestOpponentDistSq = distSq(player.x, player.y, nearestOpponent.x, nearestOpponent.y); } } const underPressure = nearestOpponent && nearestOpponentDistSq < (SUPPORT_DISTANCE_IDEAL * 0.8)**2;
 
-    if (!hasPossession && !teamPossession && player.kickCooldown <= 0 && canControlBall) {
-          logDebug(`${player.id} attempting immediate tackle/intercept.`);
-          gainPossession(player);
-          return;
-    }
+    if (!hasPossession && !teamPossession && player.kickCooldown <= 0 && canControlBall) { logDebug(`${player.id} attempting immediate tackle/intercept.`); gainPossession(player); return; }
 
     if (hasPossession) {
-        player.dribbleTicks++;
-        const MAX_DRIBBLE_TICKS = UPDATES_PER_SECOND * 5;
-        if (player.dribbleTicks > MAX_DRIBBLE_TICKS && player.kickCooldown <= 0) {
-            logWarn(`FAILSAFE: ${player.id} stuck dribbling (${player.dribbleTicks} ticks). Forcing clear.`);
-             let forceTargetX = player.team === 'A' ? player.x + 250 : player.x - 250;
-             let forceTargetY = player.y + (Math.random() - 0.5) * 150;
-             forceTargetX = Math.max(0, Math.min(FIELD_WIDTH, forceTargetX));
-             forceTargetY = Math.max(0, Math.min(FIELD_HEIGHT, forceTargetY));
-             if (!isNaN(forceTargetX) && !isNaN(forceTargetY)) { passBall(player, { x: forceTargetX, y: forceTargetY, id: 'FORCED_CLEAR' }); stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; }
-        }
-
-        player.state = 'DRIBBLING';
-        const distToGoalSq = distSq(player.x, player.y, goalX, goalY);
-        const isNearOwnGoal = distSq(player.x, player.y, ownGoalX, ownGoalY) < (FIELD_WIDTH * 0.3)**2;
-        const shootRangeSq = (FIELD_WIDTH * 0.4)**2;
-        const shootProbability = isNearOwnGoal ? 0.01 : (0.1 + 0.4 * (1 - Math.sqrt(distToGoalSq) / (FIELD_WIDTH * 0.6)));
-        if (distToGoalSq < shootRangeSq && player.kickCooldown <= 0 && Math.random() < shootProbability) { player.state = 'SHOOTING'; shootBall(player, goalX, goalY + (Math.random() - 0.5) * GOAL_WIDTH * 1.2); stats[player.team === 'A' ? 'teamA' : 'teamB'].shots++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; }
-
-        let bestPassTarget = findBestPassOption(player);
-        let passIsRisky = bestPassTarget ? isPassRisky(player, bestPassTarget) : true;
-        const passProbability = isNearOwnGoal ? 0.7 : (0.2 + (bestPassTarget ? 0.3 : -0.2) + (underPressure ? 0.2 : 0) - (passIsRisky ? 0.25 : 0));
-        if (bestPassTarget && player.kickCooldown <= 0 && Math.random() < passProbability) { if (!passIsRisky || (underPressure && Math.random() < 0.5) ) { player.state = 'PASSING'; passBall(player, bestPassTarget); stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; } }
-
-        let targetX = goalX; let targetY = goalY;
-        if (underPressure) { const angleToOpp = Math.atan2(nearestOpponent.y - player.y, nearestOpponent.x - player.x); const angleToGoal = Math.atan2(goalY - player.y, goalX - player.x); if(!isNaN(angleToOpp) && !isNaN(angleToGoal)){ let dribbleAngle = angleToOpp + Math.PI + (angleToGoal - (angleToOpp + Math.PI)) * 0.5; targetX = player.x + Math.cos(dribbleAngle) * 100; targetY = player.y + Math.sin(dribbleAngle) * 100; } else { targetY += (Math.random() - 0.5) * FIELD_HEIGHT * 0.2; } } else { targetY += (Math.random() - 0.5) * FIELD_HEIGHT * 0.2; }
-        player.targetX = targetX; player.targetY = targetY;
-        movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * PLAYER_DRIBBLE_SPEED_FACTOR, true);
-        return;
+        player.dribbleTicks++; const MAX_DRIBBLE_TICKS = UPDATES_PER_SECOND * 5; if (player.dribbleTicks > MAX_DRIBBLE_TICKS && player.kickCooldown <= 0) { logWarn(`FAILSAFE: ${player.id} stuck dribbling (${player.dribbleTicks} ticks). Forcing clear.`); let forceTargetX = player.team === 'A' ? player.x + 250 : player.x - 250; let forceTargetY = player.y + (Math.random() - 0.5) * 150; forceTargetX = Math.max(0, Math.min(FIELD_WIDTH, forceTargetX)); forceTargetY = Math.max(0, Math.min(FIELD_HEIGHT, forceTargetY)); if (!isNaN(forceTargetX) && !isNaN(forceTargetY)) { passBall(player, { x: forceTargetX, y: forceTargetY, id: 'FORCED_CLEAR' }); stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; } }
+        player.state = 'DRIBBLING'; const distToGoalSq = distSq(player.x, player.y, goalX, goalY); const isNearOwnGoal = distSq(player.x, player.y, ownGoalX, ownGoalY) < (FIELD_WIDTH * 0.3)**2; const shootRangeSq = (FIELD_WIDTH * 0.4)**2; const shootProbability = isNearOwnGoal ? 0.01 : (0.1 + 0.4 * (1 - Math.sqrt(distToGoalSq) / (FIELD_WIDTH * 0.6))); if (distToGoalSq < shootRangeSq && player.kickCooldown <= 0 && Math.random() < shootProbability) { player.state = 'SHOOTING'; shootBall(player, goalX, goalY + (Math.random() - 0.5) * GOAL_WIDTH * 1.2); stats[player.team === 'A' ? 'teamA' : 'teamB'].shots++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; }
+        let bestPassTarget = findBestPassOption(player); let passIsRisky = bestPassTarget ? isPassRisky(player, bestPassTarget) : true; const passProbability = isNearOwnGoal ? 0.7 : (0.2 + (bestPassTarget ? 0.3 : -0.2) + (underPressure ? 0.2 : 0) - (passIsRisky ? 0.25 : 0)); if (bestPassTarget && player.kickCooldown <= 0 && Math.random() < passProbability) { if (!passIsRisky || (underPressure && Math.random() < 0.5) ) { player.state = 'PASSING'; passBall(player, bestPassTarget); stats[player.team === 'A' ? 'teamA' : 'teamB'].passes++; player.kickCooldown = KICK_COOLDOWN_FRAMES; player.dribbleTicks = 0; return; } }
+        let targetX = goalX; let targetY = goalY; if (underPressure) { const angleToOpp = Math.atan2(nearestOpponent.y - player.y, nearestOpponent.x - player.x); const angleToGoal = Math.atan2(goalY - player.y, goalX - player.x); if(!isNaN(angleToOpp) && !isNaN(angleToGoal)){ let dribbleAngle = angleToOpp + Math.PI + (angleToGoal - (angleToOpp + Math.PI)) * 0.5; targetX = player.x + Math.cos(dribbleAngle) * 100; targetY = player.y + Math.sin(dribbleAngle) * 100; } else { targetY += (Math.random() - 0.5) * FIELD_HEIGHT * 0.2; } } else { targetY += (Math.random() - 0.5) * FIELD_HEIGHT * 0.2; } player.targetX = targetX; player.targetY = targetY; movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * PLAYER_DRIBBLE_SPEED_FACTOR, true); return;
     } else { player.dribbleTicks = 0; }
 
     if (teamPossession) {
-        player.state = 'SUPPORTING';
-        const ballCarrier = getPlayerById(ball.ownerId);
-        if (!ballCarrier || isNaN(ballCarrier.x) || isNaN(ballCarrier.y)) { logWarn(`Invalid ball carrier (${ball.ownerId}) in SUPPORTING state for ${player.id}. Reverting to RETURNING.`); player.state = 'RETURNING'; } else { let bestSupportX = player.x; let bestSupportY = player.y; let bestScore = -Infinity; const searchRadius = SUPPORT_DISTANCE_IDEAL + SUPPORT_DISTANCE_VARIANCE; for (let i = 0; i < 8; i++) { let angle = (i / 8) * Math.PI * 2; let dist = SUPPORT_DISTANCE_IDEAL + (Math.random() - 0.5) * SUPPORT_DISTANCE_VARIANCE * 2; let candidateX = ballCarrier.x + Math.cos(angle) * dist; let candidateY = ballCarrier.y + Math.sin(angle) * dist; candidateX = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, candidateX)); candidateY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, candidateY)); let score = 0; const [nearestOpp] = findClosestPlayers(player.team === 'A' ? 'B' : 'A', candidateX, candidateY); if (nearestOpp && !isNaN(nearestOpp.x) && !isNaN(nearestOpp.y)) score += Math.sqrt(distSq(candidateX, candidateY, nearestOpp.x, nearestOpp.y)); else score += 100; const currentDistToGoalSq = distSq(player.x, player.y, goalX, goalY); const candidateDistToGoalSq = distSq(candidateX, candidateY, goalX, goalY); if (candidateDistToGoalSq < currentDistToGoalSq) score *= 1.2; if ((player.role === 'FWD' || player.role === 'MID') && ((player.team === 'A' && candidateX < ballCarrier.x - 50) || (player.team === 'B' && candidateX > ballCarrier.x + 50))) { score *= 0.5; } if (score > bestScore) { bestScore = score; bestSupportX = candidateX; bestSupportY = candidateY; } } player.targetX = bestSupportX; player.targetY = bestSupportY; movePlayerTowardsTarget(player, BASE_PLAYER_SPEED); return; }
+        player.state = 'SUPPORTING'; const ballCarrier = getPlayerById(ball.ownerId); if (!ballCarrier || isNaN(ballCarrier.x) || isNaN(ballCarrier.y)) { logWarn(`Invalid ball carrier (${ball.ownerId}) in SUPPORTING state for ${player.id}. Reverting to RETURNING.`); player.state = 'RETURNING'; } else { let bestSupportX = player.x; let bestSupportY = player.y; let bestScore = -Infinity; const searchRadius = SUPPORT_DISTANCE_IDEAL + SUPPORT_DISTANCE_VARIANCE; for (let i = 0; i < 8; i++) { let angle = (i / 8) * Math.PI * 2; let dist = SUPPORT_DISTANCE_IDEAL + (Math.random() - 0.5) * SUPPORT_DISTANCE_VARIANCE * 2; let candidateX = ballCarrier.x + Math.cos(angle) * dist; let candidateY = ballCarrier.y + Math.sin(angle) * dist; candidateX = Math.max(PLAYER_RADIUS, Math.min(FIELD_WIDTH - PLAYER_RADIUS, candidateX)); candidateY = Math.max(PLAYER_RADIUS, Math.min(FIELD_HEIGHT - PLAYER_RADIUS, candidateY)); let score = 0; const [nearestOpp] = findClosestPlayers(player.team === 'A' ? 'B' : 'A', candidateX, candidateY); if (nearestOpp && !isNaN(nearestOpp.x) && !isNaN(nearestOpp.y)) score += Math.sqrt(distSq(candidateX, candidateY, nearestOpp.x, nearestOpp.y)); else score += 100; const currentDistToGoalSq = distSq(player.x, player.y, goalX, goalY); const candidateDistToGoalSq = distSq(candidateX, candidateY, goalX, goalY); if (candidateDistToGoalSq < currentDistToGoalSq) score *= 1.2; if ((player.role === 'FWD' || player.role === 'MID') && ((player.team === 'A' && candidateX < ballCarrier.x - 50) || (player.team === 'B' && candidateX > ballCarrier.x + 50))) { score *= 0.5; } if (score > bestScore) { bestScore = score; bestSupportX = candidateX; bestSupportY = candidateY; } } player.targetX = bestSupportX; player.targetY = bestSupportY; movePlayerTowardsTarget(player, BASE_PLAYER_SPEED); return; }
     }
 
-    let shouldChase = false;
-    let pressingDistanceSq = 0;
-    if (player.role === 'FWD') pressingDistanceSq = PRESSING_DISTANCE_FWD ** 2;
-    else if (player.role === 'MID') pressingDistanceSq = PRESSING_DISTANCE_MID ** 2;
-    else pressingDistanceSq = PRESSING_DISTANCE_DEF ** 2;
-    if ((oppPossession || ballIsLoose) && playerDistToBallSq < pressingDistanceSq) { const [closestTeammateToBall] = findClosestPlayers(player.team, ball.x, ball.y); if (closestTeammateToBall === player) { shouldChase = true; } }
-
-    if (shouldChase) {
-        player.state = ballIsLoose ? 'CHASING_LOOSE' : 'PRESSING';
-        player.targetX = ball.x; player.targetY = ball.y;
-        movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * PLAYER_SPRINT_MULTIPLIER);
-        return;
-    }
-    else if (oppPossession) {
-        player.state = 'MARKING/HOLDING';
-        const ballCarrier = getPlayerById(ball.ownerId);
-         if (!ballCarrier || isNaN(ballCarrier.x) || isNaN(ballCarrier.y)) { logWarn(`Invalid ball carrier (${ball.ownerId}) in MARKING/HOLDING state for ${player.id}. Reverting to RETURNING.`); player.state = 'RETURNING'; } else { let markTarget = null; if (player.role === 'DEF' || player.role === 'MID') { let closestOpponentDistSq = Infinity; players.forEach(opp => { if (opp.team !== player.team && opp.role !== 'GK' && !isNaN(opp.x) && !isNaN(opp.y)) { const dSq = distSq(player.x, player.y, opp.x, opp.y); const dangerZoneSq = (FIELD_WIDTH * 0.4)**2; if (dSq < dangerZoneSq && dSq < closestOpponentDistSq) { closestOpponentDistSq = dSq; markTarget = opp; } } }); } if (markTarget && !isNaN(markTarget.x) && !isNaN(markTarget.y)) { const distToOwnGoal = Math.sqrt(distSq(markTarget.x, markTarget.y, ownGoalX, ownGoalY) + 1); player.targetX = markTarget.x + (ownGoalX - markTarget.x) * (DEFENSIVE_MARKING_DISTANCE / distToOwnGoal); player.targetY = markTarget.y + (ownGoalY - markTarget.y) * (DEFENSIVE_MARKING_DISTANCE / distToOwnGoal); } else { const dynamicPos = calculateDynamicFormationPos(player, ball.x, ball.y); player.targetX = dynamicPos.x; player.targetY = dynamicPos.y; } movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * 0.9); return; }
-    }
-
-    player.state = 'RETURNING';
-    const dynamicPos = calculateDynamicFormationPos(player, ball.x, ball.y);
-    player.targetX = dynamicPos.x;
-    player.targetY = dynamicPos.y;
-    movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * 0.9);
+    let shouldChase = false; let pressingDistanceSq = 0; if (player.role === 'FWD') pressingDistanceSq = PRESSING_DISTANCE_FWD ** 2; else if (player.role === 'MID') pressingDistanceSq = PRESSING_DISTANCE_MID ** 2; else pressingDistanceSq = PRESSING_DISTANCE_DEF ** 2; if ((oppPossession || ballIsLoose) && playerDistToBallSq < pressingDistanceSq) { const [closestTeammateToBall] = findClosestPlayers(player.team, ball.x, ball.y); if (closestTeammateToBall === player) { shouldChase = true; } }
+    if (shouldChase) { player.state = ballIsLoose ? 'CHASING_LOOSE' : 'PRESSING'; player.targetX = ball.x; player.targetY = ball.y; movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * PLAYER_SPRINT_MULTIPLIER); return; }
+    else if (oppPossession) { player.state = 'MARKING/HOLDING'; const ballCarrier = getPlayerById(ball.ownerId); if (!ballCarrier || isNaN(ballCarrier.x) || isNaN(ballCarrier.y)) { logWarn(`Invalid ball carrier (${ball.ownerId}) in MARKING/HOLDING state for ${player.id}. Reverting to RETURNING.`); player.state = 'RETURNING'; } else { let markTarget = null; if (player.role === 'DEF' || player.role === 'MID') { let closestOpponentDistSq = Infinity; players.forEach(opp => { if (opp.team !== player.team && opp.role !== 'GK' && !isNaN(opp.x) && !isNaN(opp.y)) { const dSq = distSq(player.x, player.y, opp.x, opp.y); const dangerZoneSq = (FIELD_WIDTH * 0.4)**2; if (dSq < dangerZoneSq && dSq < closestOpponentDistSq) { closestOpponentDistSq = dSq; markTarget = opp; } } }); } if (markTarget && !isNaN(markTarget.x) && !isNaN(markTarget.y)) { const distToOwnGoal = Math.sqrt(distSq(markTarget.x, markTarget.y, ownGoalX, ownGoalY) + 1); player.targetX = markTarget.x + (ownGoalX - markTarget.x) * (DEFENSIVE_MARKING_DISTANCE / distToOwnGoal); player.targetY = markTarget.y + (ownGoalY - markTarget.y) * (DEFENSIVE_MARKING_DISTANCE / distToOwnGoal); } else { const dynamicPos = calculateDynamicFormationPos(player, ball.x, ball.y); player.targetX = dynamicPos.x; player.targetY = dynamicPos.y; } movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * 0.9); return; } }
+    player.state = 'RETURNING'; const dynamicPos = calculateDynamicFormationPos(player, ball.x, ball.y); player.targetX = dynamicPos.x; player.targetY = dynamicPos.y; movePlayerTowardsTarget(player, BASE_PLAYER_SPEED * 0.9);
 }
 
 // --- Other Simulation Functions ---
@@ -181,81 +124,57 @@ function handleHalfTime() { logDebug("[State Transition] Handling Half Time"); i
 function startSecondHalf() { logDebug("[State Transition] Starting Second Half"); if (gameState !== 'HALF_TIME') { logWarn("Warning: Tried to start second half but not in halftime state:", gameState); return; } if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; resetPositions('B'); lastUpdateTimestamp = Date.now(); gameState = 'SECOND_HALF'; broadcast({ type: 'secondHalfStart', payload: { stats } }); gameLogicInterval = setInterval(updateGame, MILLISECONDS_PER_UPDATE); logDebug("Game logic interval started for Second Half."); }
 function handleFullTime() { logDebug("[State Transition] Handling Full Time"); if (gameState !== 'SECOND_HALF') { logWarn("Warning: Tried to handle fulltime but not in second half state:", gameState); return; } if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; gameState = 'FULL_TIME'; serverGameTime = 90 * 60; breakEndTime = Date.now() + BETWEEN_MATCH_BREAK_MS; if (availableTeams.length < 2) { logDebug("Team pool low, resetting and shuffling for next match."); availableTeams = [...nationalTeams]; shuffleArray(availableTeams); availableTeams = availableTeams.filter(t => t.name !== teamA?.name && t.name !== teamB?.name); if (availableTeams.length < 2) { logError("FATAL: Not enough unique teams available even after reset!"); if(teamA) availableTeams.push(nationalTeams.find(t => t.name === teamA.name)); if(teamB) availableTeams.push(nationalTeams.find(t => t.name === teamB.name)); shuffleArray(availableTeams); } } const nextTeamDataA = availableTeams.pop(); const nextTeamDataB = availableTeams.pop(); if (!nextTeamDataA || !nextTeamDataB) { logError("Failed to get next teams! Restarting initial sequence."); startInitialSequence(); return; } const nextOdds = generateOdds(nextTeamDataA.rating, nextTeamDataB.rating); nextMatchDetails = { teamA: nextTeamDataA, teamB: nextTeamDataB, oddsA: nextOdds.oddsA, oddsB: nextOdds.oddsB }; logDebug(`Prepared next match: ${nextMatchDetails.teamA.name} vs ${nextMatchDetails.teamB.name} (Odds: ${nextMatchDetails.oddsA} / ${nextMatchDetails.oddsB})`); broadcast({ type: 'fullTime', payload: { scoreA, scoreB, breakEndTime, stats, nextMatch: nextMatchDetails } }); resolveAllBets(); breakTimerTimeout = setTimeout(setupNextMatch, BETWEEN_MATCH_BREAK_MS); logDebug(`Full Time declared. Bet resolution done. Next match setup scheduled for ${new Date(breakEndTime).toLocaleTimeString()}`); }
 function setupNextMatch() { logDebug("[State Transition] Setting up Next Match (from stored details)"); if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; if (!nextMatchDetails || !nextMatchDetails.teamA || !nextMatchDetails.teamB) { logError("Error: nextMatchDetails not available when setting up next match. Restarting sequence."); startInitialSequence(); return; } if (!setupTeams(nextMatchDetails.teamA, nextMatchDetails.teamB)) { logError("Failed to setup teams using nextMatchDetails! Restarting initial sequence."); startInitialSequence(); return; } const setupTeamA = teamA; const setupTeamB = teamB; const setupOddsA = oddsA; const setupOddsB = oddsB; nextMatchDetails = null; gameState = 'PRE_MATCH'; logDebug(`Transitioning to PRE_MATCH for ${setupTeamA.name} vs ${setupTeamB.name}`); broadcast({ type: 'preMatch', payload: { teamA: setupTeamA, teamB: setupTeamB, oddsA: setupOddsA, oddsB: setupOddsB } }); breakTimerTimeout = setTimeout(() => { if (gameState === 'PRE_MATCH') { startMatch(); } else { logWarn(`Warning: Wanted to start match from PRE_MATCH delay, but state is now ${gameState}.`); } }, PRE_MATCH_DELAY_MS); logDebug(`Next match setup complete (${setupTeamA.name} vs ${setupTeamB.name}). Kickoff in ${PRE_MATCH_DELAY_MS / 1000}s.`); }
-function resolveAllBets() {     
+
+function resolveAllBets() {
     logDebug(`Resolving bets for finished match: ${teamA?.name} ${scoreA} - ${scoreB} ${teamB?.name}`);
     const winningTeam = scoreA > scoreB ? 'A' : (scoreB > scoreA ? 'B' : null); // null for draw
 
     clients.forEach((clientData, ws) => {
-    if (clientData.currentBet) {
-        let payout = 0;
-        let message = "";
-        const bet = clientData.currentBet; // { team: 'A'|'B', amount: number }
-        const betOdds = bet.team === 'A' ? parseFloat(oddsA || 0) : parseFloat(oddsB || 0);
-        const betTeamName = bet.team === 'A' ? teamA?.name || 'Team A' : teamB?.name || 'Team B';
+        if (clientData.currentBet) {
+            let payout = 0;
+            let message = "";
+            const bet = clientData.currentBet; // { team: 'A'|'B', amount: number }
+            const betOdds = bet.team === 'A' ? parseFloat(oddsA || 0) : parseFloat(oddsB || 0);
+            const betTeamName = bet.team === 'A' ? teamA?.name || 'Team A' : teamB?.name || 'Team B';
 
-        // --- Robust Balance Handling ---
-        let currentBalance = parseFloat(clientData.balance || 0); // Ensure starting balance is a number
-        const betAmount = parseFloat(bet.amount || 0);      // Ensure bet amount is a number
+            // --- Robust Balance Handling ---
+            let currentBalance = parseFloat(clientData.balance || 0); // Ensure starting balance is a number
+            const betAmount = parseFloat(bet.amount || 0);      // Ensure bet amount is a number
 
-        logDebug(`Resolving bet for ${clientData.nickname || clientData.id}: Team=${bet.team}, Amount=${betAmount.toFixed(2)}, Odds=${betOdds.toFixed(2)}, Balance BEFORE: ${currentBalance.toFixed(2)}`);
+            logDebug(`Resolving bet for ${clientData.nickname || clientData.id}: Team=${bet.team}, Amount=${betAmount.toFixed(2)}, Odds=${betOdds.toFixed(2)}, Balance BEFORE: ${currentBalance.toFixed(2)}`);
 
-        if (isNaN(betOdds) || betOdds <= 0 || isNaN(betAmount) || betAmount <= 0) {
-             logError(`Invalid odds (${betOdds}) or amount (${betAmount}) for bet resolution for ${clientData.nickname}. Refunding.`);
-             // Refund (amount was already deducted, so add it back)
-             currentBalance += betAmount;
-             payout = betAmount; // For success check
-             message = `Error resolving bet due to invalid odds/amount. Bet on ${betTeamName} refunded ($${betAmount.toFixed(2)}).`;
-             logDebug(`Bet refunded (invalid odds/amount) for ${clientData.nickname}: +$${betAmount.toFixed(2)}`);
-        } else if (bet.team === winningTeam) {
-            // --- Winning Bet Calculation ---
-            payout = betAmount * betOdds; // Calculate total return (stake + profit)
+            if (isNaN(betOdds) || betOdds <= 0 || isNaN(betAmount) || betAmount <= 0) {
+                 logError(`Invalid odds (${betOdds}) or amount (${betAmount}) for bet resolution for ${clientData.nickname}. Refunding.`);
+                 currentBalance += betAmount; payout = betAmount; message = `Error resolving bet due to invalid odds/amount. Bet on ${betTeamName} refunded ($${betAmount.toFixed(2)}).`; logDebug(`Bet refunded (invalid odds/amount) for ${clientData.nickname}: +$${betAmount.toFixed(2)}`);
+            } else if (bet.team === winningTeam) {
+                payout = betAmount * betOdds; // Calculate total return (stake + profit)
+                if (isNaN(payout)) {
+                     logError(`NaN payout calculated for ${clientData.nickname}. Odds: ${betOdds}, Amount: ${betAmount}. Refunding bet.`); currentBalance += betAmount; payout = betAmount; message = `Calculation error! Bet on ${betTeamName} refunded ($${betAmount.toFixed(2)}).`;
+                } else {
+                     logDebug(` Bet won calculation for ${clientData.nickname}: Payout = ${betAmount.toFixed(2)} * ${betOdds.toFixed(2)} = ${payout.toFixed(2)}`);
+                     currentBalance += payout; // Add total return to the balance
+                     message = `Bet on ${betTeamName} WON! Payout: +$${payout.toFixed(2)}.`; logDebug(`   Balance AFTER calc: ${currentBalance.toFixed(2)}`);
+                 }
+            } else if (winningTeam === null) { // Draw refund
+                currentBalance += betAmount; payout = betAmount; message = `Match drawn! Bet on ${betTeamName} refunded ($${betAmount.toFixed(2)}).`; logDebug(`Bet refunded (draw) for ${clientData.nickname}: +$${betAmount.toFixed(2)}`);
+            } else { // Bet lost
+                payout = 0; message = `Bet on ${betTeamName} LOST (-$${betAmount.toFixed(2)}).`; logDebug(`Bet lost for ${clientData.nickname}: -$${betAmount.toFixed(2)} (Balance remains: ${currentBalance.toFixed(2)})`);
+            }
 
-            if (isNaN(payout)) {
-                 logError(`NaN payout calculated for ${clientData.nickname}. Odds: ${betOdds}, Amount: ${betAmount}. Refunding bet.`);
-                  currentBalance += betAmount; // Refund original bet
-                  payout = betAmount; // For success check later
-                  message = `Calculation error! Bet on ${betTeamName} refunded ($${betAmount.toFixed(2)}).`;
-            } else {
-                 logDebug(` Bet won calculation for ${clientData.nickname}: Payout = ${betAmount.toFixed(2)} * ${betOdds.toFixed(2)} = ${payout.toFixed(2)}`);
-                 currentBalance += payout; // Add total return to the balance (which already had stake deducted)
-                 message = `Bet on ${betTeamName} WON! Payout: +$${payout.toFixed(2)}.`;
-                 logDebug(`   Balance AFTER calc: ${currentBalance.toFixed(2)}`);
-             }
-        } else if (winningTeam === null) { // Draw refund
-            currentBalance += betAmount; // Refund stake
-            payout = betAmount;
-            message = `Match drawn! Bet on ${betTeamName} refunded ($${betAmount.toFixed(2)}).`;
-            logDebug(`Bet refunded (draw) for ${clientData.nickname}: +$${betAmount.toFixed(2)}`);
-        } else { // Bet lost
-            payout = 0; // Balance already reduced when bet was placed
-            message = `Bet on ${betTeamName} LOST (-$${betAmount.toFixed(2)}).`;
-             logDebug(`Bet lost for ${clientData.nickname}: -$${betAmount.toFixed(2)} (Balance remains: ${currentBalance.toFixed(2)})`);
+            // --- Final Balance Update & Message Sending ---
+            clientData.balance = parseFloat(currentBalance.toFixed(2));
+            logDebug(`   Final Balance for ${clientData.nickname}: ${clientData.balance.toFixed(2)}`);
+
+            sendToClient(ws, { type: 'betResult', payload: { success: payout >= betAmount || winningTeam === null, message: message, newBalance: clientData.balance } });
+            clientData.currentBet = null;
         }
-
-        // --- Final Balance Update & Message Sending ---
-        // Store the final balance with fixed precision
-        clientData.balance = parseFloat(currentBalance.toFixed(2));
-        logDebug(`   Final Balance for ${clientData.nickname}: ${clientData.balance.toFixed(2)}`);
-
-        sendToClient(ws, {
-            type: 'betResult',
-            payload: {
-                success: payout >= betAmount || winningTeam === null, // True if won OR refunded
-                message: message,
-                newBalance: clientData.balance // Send the updated, correctly formatted balance
-             }
-        });
-        clientData.currentBet = null; // Clear bet *after* sending result
-    } else {
-         // Optional: Log clients without active bets if needed
-         // logDebug(`Client ${clientData.nickname || clientData.id} had no active bet to resolve.`);
-    }
-});
-logDebug("Bet resolution complete.");
-broadcastLeaderboard(); // Broadcast updated leaderboard
+    });
+    logDebug("Bet resolution complete.");
+    broadcastLeaderboard(); // Broadcast updated leaderboard
 }
 
 function startInitialSequence() { console.log("Starting initial server sequence..."); gameState = 'INITIALIZING'; nextMatchDetails = null; if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; logDebug("Cleared existing timers/intervals."); logDebug("Initial sequence: Resetting team pool."); availableTeams = [...nationalTeams]; shuffleArray(availableTeams); const firstTeamA = availableTeams.pop(); const firstTeamB = availableTeams.pop(); if (!firstTeamA || !firstTeamB) { logError("Failed to get initial teams! Retrying in 5s..."); breakTimerTimeout = setTimeout(startInitialSequence, 5000); return; } if (!setupTeams(firstTeamA, firstTeamB)) { logError("Failed to setup initial teams! Retrying in 5s..."); breakTimerTimeout = setTimeout(startInitialSequence, 5000); return; } gameState = 'INITIAL_BETTING'; breakEndTime = Date.now() + INITIAL_BETTING_WAIT_MS; logDebug(`Initial betting period ends at ${new Date(breakEndTime).toLocaleTimeString()}`); broadcast({ type: 'initialWait', payload: { teamA, teamB, oddsA, oddsB, breakEndTime, allTournamentTeams: nationalTeams.map(t => t.name) } }); breakTimerTimeout = setTimeout(() => { if(gameState === 'INITIAL_BETTING') { logDebug("Initial betting wait over. Proceeding to setup first match details."); gameState = 'PRE_MATCH'; logDebug(`Transitioning to PRE_MATCH for ${teamA.name} vs ${teamB.name}`); broadcast({ type: 'preMatch', payload: { teamA, teamB, oddsA, oddsB } }); breakTimerTimeout = setTimeout(() => { if (gameState === 'PRE_MATCH') { startMatch(); } else { logWarn(`Warning: Wanted to start first match from PRE_MATCH delay, but state is now ${gameState}.`); } }, PRE_MATCH_DELAY_MS); } else { logWarn(`Warning: Initial wait timer finished, but game state was already ${gameState}. No action taken.`); } }, INITIAL_BETTING_WAIT_MS); }
+
 
 // --- Leaderboard Function ---
 function getLeaderboardData(limit = 10) { const leaderboard = []; clients.forEach((clientData, ws) => { if (clientData.nickname) { leaderboard.push({ nickname: clientData.nickname, balance: parseFloat(clientData.balance || 0) }); } }); leaderboard.sort((a, b) => b.balance - a.balance); return leaderboard.slice(0, limit); }
@@ -270,7 +189,6 @@ setInterval(() => { if (gameState === 'FIRST_HALF' || gameState === 'SECOND_HALF
 // --- Helper Functions ---
 function createFullGameStatePayload() { const payload = { gameState, scoreA, scoreB, teamA, teamB, oddsA, oddsB, serverGameTime: calculateCurrentDisplayTime(), players: (gameState === 'FIRST_HALF' || gameState === 'SECOND_HALF' || gameState === 'PRE_MATCH') ? (players || []) : [], ball: (gameState === 'FIRST_HALF' || gameState === 'SECOND_HALF' || gameState === 'PRE_MATCH') ? (ball || { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx:0, vy:0, ownerId: null }) : { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx:0, vy:0, ownerId: null }, breakEndTime: (gameState === 'INITIAL_BETTING' || gameState === 'HALF_TIME' || gameState === 'FULL_TIME') ? breakEndTime : null, stats: stats, allTournamentTeams: nationalTeams.map(t => t.name) }; if (gameState === 'FULL_TIME' && nextMatchDetails) { payload.nextMatch = nextMatchDetails; } return payload; }
 function calculateCurrentDisplayTime() { if (gameState === 'FIRST_HALF') { return Math.max(0, Math.min(45 * 60, serverGameTime)); } else if (gameState === 'SECOND_HALF') { return Math.max(45 * 60, Math.min(90 * 60, serverGameTime)); } else if (gameState === 'HALF_TIME') { return 45 * 60; } else if (gameState === 'FULL_TIME' || gameState === 'PRE_MATCH') { return 90 * 60; } else { return 0; } }
-
 
 // --- Server Start ---
 const PORT = process.env.PORT; if (!PORT) { logError("FATAL ERROR: PORT environment variable not set. Exiting."); process.exit(1); } const HOST = '0.0.0.0'; server.listen(parseInt(PORT, 10), HOST, () => { console.log(`HTTP and WebSocket server listening on ${HOST}:${PORT}`); startInitialSequence(); });
