@@ -5,7 +5,7 @@ const path = require('path');
 const WebSocket = require('ws');
 
 // --- Debug Logging Control ---
-const DEBUG_LOG = false;
+const DEBUG_LOG = true; // Enable temporarily to watch payout logs
 function logDebug(...args) { if (DEBUG_LOG) { const timestamp = new Date().toISOString().slice(11, 23); console.log(`[DEBUG ${timestamp}]`, ...args); } }
 function logError(...args) { const timestamp = new Date().toISOString().slice(11, 23); console.error(`[ERROR ${timestamp}]`, ...args); }
 function logWarn(...args) { const timestamp = new Date().toISOString().slice(11, 23); console.warn(`[WARN ${timestamp}]`, ...args); }
@@ -32,10 +32,24 @@ const wss = new WebSocket.Server({ server });
 console.log("WebSocket server attached to HTTP server.");
 
 // --- Game Constants ---
-const INITIAL_BETTING_WAIT_MINS = 0.3; const REAL_MATCH_DURATION_MINS = 1.5; const BETWEEN_MATCH_BREAK_MINS = 0.3; const HALF_TIME_BREAK_S = 10; const PRE_MATCH_DELAY_MS = 3000;
-const INITIAL_BETTING_WAIT_MS = INITIAL_BETTING_WAIT_MINS * 60 * 1000; const INGAME_MATCH_DURATION_MINS = 90; const REAL_HALF_DURATION_MS = (REAL_MATCH_DURATION_MINS / 2) * 60 * 1000; const HALF_TIME_BREAK_MS = HALF_TIME_BREAK_S * 1000; const BETWEEN_MATCH_BREAK_MS = BETWEEN_MATCH_BREAK_MINS * 60 * 1000; const UPDATES_PER_SECOND = 30; const MILLISECONDS_PER_UPDATE = 1000 / UPDATES_PER_SECOND; const GAME_SPEED_FACTOR = (INGAME_MATCH_DURATION_MINS * 60 * 1000) / (REAL_MATCH_DURATION_MINS * 60 * 1000);
+// Timing
+const INITIAL_BETTING_WAIT_MINS = 0.3; const REAL_MATCH_DURATION_MINS = 2.5; /* SLOWED DOWN */ const BETWEEN_MATCH_BREAK_MINS = 0.3; const HALF_TIME_BREAK_S = 15; /* Slightly longer HT */ const PRE_MATCH_DELAY_MS = 3000;
+const INITIAL_BETTING_WAIT_MS = INITIAL_BETTING_WAIT_MINS * 60 * 1000; const INGAME_MATCH_DURATION_MINS = 90; const REAL_HALF_DURATION_MS = (REAL_MATCH_DURATION_MINS / 2) * 60 * 1000; const HALF_TIME_BREAK_MS = HALF_TIME_BREAK_S * 1000; const BETWEEN_MATCH_BREAK_MS = BETWEEN_MATCH_BREAK_MINS * 60 * 1000; const UPDATES_PER_SECOND = 30; const MILLISECONDS_PER_UPDATE = 1000 / UPDATES_PER_SECOND;
+// Game speed factor derived from durations (Lower REAL_MATCH_DURATION_MINS slows game clock)
+const GAME_SPEED_FACTOR = (INGAME_MATCH_DURATION_MINS * 60 * 1000) / (REAL_MATCH_DURATION_MINS * 60 * 1000);
+console.log(`Game Speed Factor: ${GAME_SPEED_FACTOR.toFixed(2)} (Lower is slower)`); // Log the speed factor
+
+// Field Dimensions
 const FIELD_WIDTH = 1050; const FIELD_HEIGHT = 680; const GOAL_WIDTH = 120; const GOAL_DEPTH = 20; const CENTER_CIRCLE_RADIUS = 91.5; const PLAYER_RADIUS = 10; const BALL_RADIUS = 5; const PENALTY_AREA_WIDTH = 165; const PENALTY_AREA_HEIGHT = 403;
-const BASE_PLAYER_SPEED = 3.9; const PLAYER_SPRINT_MULTIPLIER = 1.5; const PLAYER_DRIBBLE_SPEED_FACTOR = 0.8; const GK_SPEED_FACTOR = 0.85; const BALL_MAX_SPEED = 17; const BALL_FRICTION = 0.975; const SHOT_POWER_BASE = 15; const SHOT_POWER_VARIANCE = 5; const PASS_POWER_FACTOR = 0.09; const PASS_MIN_POWER = 6; const KICK_RANGE = PLAYER_RADIUS + BALL_RADIUS + 5; const CONTROL_RANGE = PLAYER_RADIUS + BALL_RADIUS + 2; const KICK_COOLDOWN_FRAMES = 12; const SHOT_INACCURACY_FACTOR = 0.08; const PASS_INACCURACY_FACTOR = 0.06; const DRIBBLE_CONTROL_DISTANCE = PLAYER_RADIUS + BALL_RADIUS + 1; const CHASE_BALL_ANGLE_THRESHOLD = Math.PI / 1.5; const SUPPORT_DISTANCE_IDEAL = 120; const SUPPORT_DISTANCE_VARIANCE = 60; const DEFENSIVE_LINE_X_FACTOR = 0.3; const DEFENSIVE_MARKING_DISTANCE = 50; const PRESSING_DISTANCE_FWD = FIELD_WIDTH * 0.5; const PRESSING_DISTANCE_MID = FIELD_WIDTH * 0.65; const PRESSING_DISTANCE_DEF = FIELD_WIDTH * 0.8; const COLLISION_PUSH_FACTOR = 0.6; const MIN_COLLISION_SEPARATION = 0.1;
+// AI & Physics Tuning Constants
+const BASE_PLAYER_SPEED = 3.7; // Slightly slower base
+const PLAYER_SPRINT_MULTIPLIER = 1.4;
+const PLAYER_DRIBBLE_SPEED_FACTOR = 0.8;
+const GK_SPEED_FACTOR = 0.85;
+const BALL_MAX_SPEED = 14; /* SLOWED DOWN */ const BALL_FRICTION = 0.978; /* Slightly more friction */
+const SHOT_POWER_BASE = 12; /* SLOWED DOWN */ const SHOT_POWER_VARIANCE = 4;
+const PASS_POWER_FACTOR = 0.08; /* SLOWED DOWN */ const PASS_MIN_POWER = 5; /* SLOWED DOWN */
+const KICK_RANGE = PLAYER_RADIUS + BALL_RADIUS + 5; const CONTROL_RANGE = PLAYER_RADIUS + BALL_RADIUS + 2; const KICK_COOLDOWN_FRAMES = 15; /* Slightly longer cooldown */ const SHOT_INACCURACY_FACTOR = 0.09; const PASS_INACCURACY_FACTOR = 0.07; const DRIBBLE_CONTROL_DISTANCE = PLAYER_RADIUS + BALL_RADIUS + 1; const CHASE_BALL_ANGLE_THRESHOLD = Math.PI / 1.5; const SUPPORT_DISTANCE_IDEAL = 120; const SUPPORT_DISTANCE_VARIANCE = 60; const DEFENSIVE_LINE_X_FACTOR = 0.3; const DEFENSIVE_MARKING_DISTANCE = 50; const PRESSING_DISTANCE_FWD = FIELD_WIDTH * 0.5; const PRESSING_DISTANCE_MID = FIELD_WIDTH * 0.65; const PRESSING_DISTANCE_DEF = FIELD_WIDTH * 0.8; const COLLISION_PUSH_FACTOR = 0.6; const MIN_COLLISION_SEPARATION = 0.1;
 
 // --- Team Data ---
 const nationalTeams = [ { name: "Argentina", color: "#75AADB", rating: 92 }, { name: "France", color: "#003399", rating: 91 }, { name: "Brazil", color: "#FFDF00", rating: 90 }, { name: "England", color: "#FFFFFF", textColor: "#000000", rating: 89 }, { name: "Belgium", color: "#ED2939", rating: 88 }, { name: "Croatia", color: "#FF0000", rating: 87 }, { name: "Netherlands", color: "#FF6600", rating: 87 }, { name: "Italy", color: "#003399", rating: 86 }, { name: "Portugal", color: "#006600", rating: 86 }, { name: "Spain", color: "#FF0000", rating: 85 }, { name: "Morocco", color: "#006233", rating: 84 }, { name: "Switzerland", color: "#FF0000", rating: 84 }, { name: "USA", color: "#002868", rating: 83 }, { name: "Germany", color: "#000000", rating: 83 }, { name: "Mexico", color: "#006847", rating: 82 }, { name: "Uruguay", color: "#5CBFEB", rating: 82 }, { name: "Colombia", color: "#FCD116", rating: 81 }, { name: "Senegal", color: "#00853F", rating: 81 }, { name: "Denmark", color: "#C60C30", rating: 80 }, { name: "Japan", color: "#000080", rating: 80 }, { name: "Peru", color: "#D91023", rating: 79 }, { name: "Iran", color: "#239F40", rating: 79 }, { name: "Serbia", color: "#C6363C", rating: 78 }, { name: "Poland", color: "#DC143C", rating: 78 }, { name: "Sweden", color: "#006AA7", rating: 78 }, { name: "Ukraine", color: "#005BBB", rating: 77 }, { name: "South Korea", color: "#FFFFFF", textColor:"#000000", rating: 77 }, { name: "Chile", color: "#D52B1E", rating: 76 }, { name: "Tunisia", color: "#E70013", rating: 76 }, { name: "Costa Rica", color: "#002B7F", rating: 75 }, { name: "Australia", color: "#00843D", rating: 75 }, { name: "Nigeria", color: "#008751", rating: 75 }, { name: "Austria", color: "#ED2939", rating: 74 }, { name: "Hungary", color: "#436F4D", rating: 74 }, { name: "Russia", color: "#FFFFFF", textColor:"#000000", rating: 73 }, { name: "Czech Republic", color: "#D7141A", rating: 73 }, { name: "Egypt", color: "#C8102E", rating: 73 }, { name: "Algeria", color: "#006233", rating: 72 }, { name: "Scotland", color: "#0065BF", rating: 72 }, { name: "Norway", color: "#EF2B2D", rating: 72 }, { name: "Turkey", color: "#E30A17", rating: 71 }, { name: "Mali", color: "#14B53A", rating: 71 }, { name: "Paraguay", color: "#DA121A", rating: 70 }, { name: "Ivory Coast", color: "#FF8200", rating: 70 }, { name: "Republic of Ireland", color: "#169B62", rating: 70 }, { name: "Qatar", color: "#8A1538", rating: 69 }, { name: "Saudi Arabia", color: "#006C35", rating: 69 }, { name: "Greece", color: "#0D5EAF", rating: 69 }, { name: "Romania", color: "#002B7F", rating: 68 }, ];
@@ -44,7 +58,7 @@ const sampleSquads = { "Argentina": ["E Martinez", "N Molina", "C Romero", "L Ma
 
 // --- Game State ---
 let gameState = 'INITIALIZING'; let serverGameTime = 0; let lastUpdateTimestamp = 0; let scoreA = 0; let scoreB = 0; let teamA = null; let teamB = null; let players = []; let ball = { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, vx: 0, vy: 0, ownerId: null }; let stats = { teamA: { shots: 0, passes: 0, goals: 0 }, teamB: { shots: 0, passes: 0, goals: 0 } };
-let oddsA = 2.00; let oddsB = 2.00; let oddsD = 3.00; // Odds for Draw
+let oddsA = 2.00; let oddsB = 2.00; let oddsD = 3.00;
 let breakEndTime = 0; let nextMatchDetails = null; let gameLogicInterval = null; let breakTimerTimeout = null; let clients = new Map();
 
 // --- Utility Functions ---
@@ -93,6 +107,7 @@ function startSecondHalf() { logDebug("[State Transition] Starting Second Half")
 function handleFullTime() { logDebug("[State Transition] Handling Full Time"); if (gameState !== 'SECOND_HALF') { logWarn("Warning: Tried to handle fulltime but not in second half state:", gameState); return; } if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; gameState = 'FULL_TIME'; serverGameTime = 90 * 60; breakEndTime = Date.now() + BETWEEN_MATCH_BREAK_MS; if (availableTeams.length < 2) { logDebug("Team pool low, resetting and shuffling for next match."); availableTeams = [...nationalTeams]; shuffleArray(availableTeams); availableTeams = availableTeams.filter(t => t.name !== teamA?.name && t.name !== teamB?.name); if (availableTeams.length < 2) { logError("FATAL: Not enough unique teams available even after reset!"); if(teamA) availableTeams.push(nationalTeams.find(t => t.name === teamA.name)); if(teamB) availableTeams.push(nationalTeams.find(t => t.name === teamB.name)); shuffleArray(availableTeams); } } const nextTeamDataA = availableTeams.pop(); const nextTeamDataB = availableTeams.pop(); if (!nextTeamDataA || !nextTeamDataB) { logError("Failed to get next teams! Restarting initial sequence."); startInitialSequence(); return; } const nextOdds = generateOdds(nextTeamDataA.rating, nextTeamDataB.rating); nextMatchDetails = { teamA: nextTeamDataA, teamB: nextTeamDataB, oddsA: nextOdds.oddsA, oddsB: nextOdds.oddsB, oddsD: nextOdds.oddsD }; logDebug(`Prepared next match: ${nextMatchDetails.teamA.name} vs ${nextMatchDetails.teamB.name} (Odds: A=${nextMatchDetails.oddsA}, B=${nextMatchDetails.oddsB}, D=${nextMatchDetails.oddsD})`); broadcast({ type: 'fullTime', payload: { scoreA, scoreB, breakEndTime, stats, nextMatch: nextMatchDetails } }); resolveAllBets(); breakTimerTimeout = setTimeout(setupNextMatch, BETWEEN_MATCH_BREAK_MS); logDebug(`Full Time declared. Bet resolution done. Next match setup scheduled for ${new Date(breakEndTime).toLocaleTimeString()}`); }
 function setupNextMatch() { logDebug("[State Transition] Setting up Next Match (from stored details)"); if (gameLogicInterval) clearInterval(gameLogicInterval); gameLogicInterval = null; if (breakTimerTimeout) clearTimeout(breakTimerTimeout); breakTimerTimeout = null; if (!nextMatchDetails || !nextMatchDetails.teamA || !nextMatchDetails.teamB) { logError("Error: nextMatchDetails not available when setting up next match. Restarting sequence."); startInitialSequence(); return; } if (!setupTeams(nextMatchDetails.teamA, nextMatchDetails.teamB)) { logError("Failed to setup teams using nextMatchDetails! Restarting initial sequence."); startInitialSequence(); return; } const setupTeamA = teamA; const setupTeamB = teamB; const setupOddsA = oddsA; const setupOddsB = oddsB; const setupOddsD = oddsD; nextMatchDetails = null; gameState = 'PRE_MATCH'; logDebug(`Transitioning to PRE_MATCH for ${setupTeamA.name} vs ${setupTeamB.name}`); broadcast({ type: 'preMatch', payload: { teamA: setupTeamA, teamB: setupTeamB, oddsA: setupOddsA, oddsB: setupOddsB, oddsD: setupOddsD } }); breakTimerTimeout = setTimeout(() => { if (gameState === 'PRE_MATCH') { startMatch(); } else { logWarn(`Warning: Wanted to start match from PRE_MATCH delay, but state is now ${gameState}.`); } }, PRE_MATCH_DELAY_MS); logDebug(`Next match setup complete (${setupTeamA.name} vs ${setupTeamB.name}). Kickoff in ${PRE_MATCH_DELAY_MS / 1000}s.`); }
 
+// REVISED resolveAllBets - Correct payout logic + Draw Handling
 function resolveAllBets() {
     logDebug(`Resolving bets for finished match: ${teamA?.name} ${scoreA} - ${scoreB} ${teamB?.name}`);
     const matchOutcome = scoreA > scoreB ? 'A' : (scoreB > scoreA ? 'B' : 'D'); // 'D' for Draw
@@ -101,8 +116,10 @@ function resolveAllBets() {
         if (clientData.currentBet) {
             let payout = 0; // Amount to ADD back to balance (0 if lost, stake if refunded, stake*odds if won)
             let message = "";
-            const bet = clientData.currentBet;
-            const betTeamName = bet.team === 'A' ? teamA?.name || 'Team A' : bet.team === 'B' ? teamB?.name || 'Team B' : 'Draw';
+            const bet = clientData.currentBet; // { team: 'A'|'B'|'D', amount: number }
+            const betTeamName = bet.team === 'A' ? teamA?.name || 'Team A'
+                              : bet.team === 'B' ? teamB?.name || 'Team B'
+                              : 'Draw';
             const betAmount = parseFloat(bet.amount || 0);
 
             let betOdds = 0;
@@ -117,6 +134,7 @@ function resolveAllBets() {
                  logError(`Invalid odds (${betOdds}) or amount (${betAmount}) for bet resolution for ${clientData.nickname}. Refunding.`);
                  payout = betAmount; message = `Error resolving bet due to invalid odds/amount. Bet on ${betTeamName} refunded ($${betAmount.toFixed(2)}).`; logDebug(`Bet refunded (invalid odds/amount) for ${clientData.nickname}: +$${payout.toFixed(2)}`);
             } else if (bet.team === matchOutcome) {
+                // --- Winning Bet Calculation ---
                 payout = betAmount * betOdds; // Total return = stake * odds
                 if (isNaN(payout)) {
                      logError(`NaN payout calculated for ${clientData.nickname}. Odds: ${betOdds}, Amount: ${betAmount}. Refunding bet.`);
@@ -128,7 +146,10 @@ function resolveAllBets() {
                  payout = 0; message = `Bet on ${betTeamName} LOST (-$${betAmount.toFixed(2)}).`; logDebug(`Bet lost for ${clientData.nickname}: -$${betAmount.toFixed(2)}`);
             }
 
-            currentBalance += payout; // Add the calculated payout (could be 0, stake, or stake*odds)
+            // --- Final Balance Update & Message Sending ---
+            // Payout is 0 if lost, betAmount if refunded, betAmount*betOdds if won.
+            // Add this payout to the balance that already had the stake deducted earlier.
+            currentBalance += payout;
             clientData.balance = parseFloat(currentBalance.toFixed(2));
             logDebug(`   Final Balance for ${clientData.nickname}: ${clientData.balance.toFixed(2)}`);
 
