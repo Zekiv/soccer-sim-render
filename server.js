@@ -9,7 +9,7 @@ const DEBUG_LOG = false; // Set to true for detailed logs
 function logDebug(...args) {
     if (DEBUG_LOG) {
         console.log('[DEBUG]', ...args);
-    }
+    
 }
 
 console.log("Starting server...");
