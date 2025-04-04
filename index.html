@@ -7,26 +7,95 @@
     <style>
         /* Basic Reset & Font */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f0f0; color: #333; height: 100vh; overflow: hidden; padding-top: 5px; /* Space for connection status */ }
+        html { height: 100%; } /* Ensure html takes full height */
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            color: #333;
+            min-height: 100%; /* Changed from height: 100vh */
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            padding-top: 30px; /* Space for connection status */
+            padding-bottom: 10px; /* Space at bottom */
+        }
+
+        /* Connection Status */
+        #connectionStatus {
+             position: fixed; /* Changed from absolute */
+             top: 0; left: 0; width: 100%;
+             background-color: #ffc107; color: #333;
+             padding: 4px 0; text-align: center; font-size: 0.85em;
+             z-index: 1001; transition: background-color 0.5s ease, color 0.5s ease;
+        }
+        #connectionStatus.connected { background-color: #28a745; color: white; }
+        #connectionStatus.error { background-color: #dc3545; color: white; }
 
         /* Layout Containers */
-        .container { display: flex; width: 95%; max-width: 1400px; margin-top: 10px; height: calc(100vh - 150px - 5px); /* Adjust for body padding */ gap: 10px; }
-        .game-area { flex-grow: 3; display: flex; flex-direction: column; background-color: #e0e0e0; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: relative; min-width: 400px; /* Prevent excessive shrinking */ }
-        .sidebar { flex-grow: 1; background-color: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-y: auto; display: flex; flex-direction: column; min-width: 220px; /* Ensure sidebar readable */ max-width: 300px; }
-        .chat-betting-area { width: 95%; max-width: 1400px; height: 120px; display: flex; gap: 10px; margin-top: 10px; }
+        .container {
+            display: flex;
+            width: 95%;
+            max-width: 1400px;
+            margin-top: 10px;
+            /* Let content determine height, but set a max based on viewport minus other elements */
+            /* height removed, flex children will determine */
+            gap: 10px;
+            flex-grow: 1; /* Allow container to grow */
+            min-height: 400px; /* Minimum sensible height */
+        }
+        .game-area {
+            flex-grow: 3; display: flex; flex-direction: column;
+            background-color: #e0e0e0; border-radius: 8px; padding: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: relative;
+            min-width: 300px; /* Reduced min-width */
+            min-height: 350px; /* Min height for game area */
+         }
+        .sidebar {
+            flex-grow: 1; background-color: #ffffff; padding: 15px; border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-y: auto; display: flex; flex-direction: column;
+            min-width: 200px; /* Reduced min-width */
+            max-width: 300px;
+            min-height: 350px; /* Match game area */
+        }
+        .chat-betting-area {
+            width: 95%; max-width: 1400px;
+            height: 180px; /* << INCREASED HEIGHT */
+            display: flex; gap: 10px; margin-top: 10px;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
 
         /* Game Area Components */
-        #gameCanvas { width: 100%; height: calc(100% - 60px); background-color: #2a8c3e; border: 2px solid white; display: block; transition: background-color 0.5s ease; /* For goal flash */ }
-        .match-info { display: flex; justify-content: space-around; align-items: center; padding: 10px 0; font-size: 1.2em; font-weight: bold; background-color: #f8f8f8; border-radius: 5px; margin-bottom: 10px; }
-        .team-name { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 10px; min-width: 100px; }
-        .score { padding: 0 20px; font-size: 1.3em; }
-        .game-time { min-width: 80px; text-align: center; font-variant-numeric: tabular-nums; }
+        #gameCanvas {
+            width: 100%;
+             /* Let flexbox handle height based on parent's remaining space */
+             flex-grow: 1; /* Allow canvas to take remaining space */
+             background-color: #2a8c3e; border: 2px solid white;
+             display: block; transition: background-color 0.5s ease;
+             min-height: 250px; /* Ensure minimum canvas size */
+        }
+        .match-info { display: flex; justify-content: space-around; align-items: center; padding: 10px 0; font-size: 1.1em; /* Slightly smaller base font */ font-weight: bold; background-color: #f8f8f8; border-radius: 5px; margin-bottom: 10px; flex-shrink: 0; }
+        .team-name { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 5px; /* Reduced padding */ min-width: 80px; }
+        .score { padding: 0 10px; font-size: 1.2em; }
+        .game-time { min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; font-size: 1.1em; }
 
         /* Overlays */
-        .halftime-overlay, .fulltime-overlay, .initial-wait-overlay { position: absolute; top: 60px; left: 10px; right: 10px; bottom: 10px; height: calc(100% - 70px); width: calc(100% - 20px); background-color: rgba(0, 0, 0, 0.75); color: white; display: none; /* Hidden by default */ flex-direction: column; justify-content: center; align-items: center; font-size: 2.2em; text-align: center; z-index: 10; border-radius: 5px; box-sizing: border-box; padding: 20px; }
-        .initial-wait-overlay .overlay-title, .halftime-overlay .overlay-title, .fulltime-overlay .overlay-title { font-size: 1em; margin-bottom: 10px; } /* Title style */
-        .initial-wait-overlay .overlay-details, .halftime-overlay .overlay-details, .fulltime-overlay .overlay-details { font-size: 0.8em; margin-bottom: 20px; font-weight: normal; } /* Score/Details style */
-        .initial-wait-overlay span, .halftime-overlay span, .fulltime-overlay span { font-size: 0.7em; margin-top: 15px; font-weight: normal; } /* Timer style */
+        .halftime-overlay, .fulltime-overlay, .initial-wait-overlay {
+             position: absolute;
+             /* Cover the canvas area below the match-info */
+             top: 70px; /* Approx height of match-info + padding */
+             left: 10px; right: 10px; bottom: 10px;
+             /* height removed, let top/bottom define it */
+             background-color: rgba(0, 0, 0, 0.75); color: white; display: none;
+             flex-direction: column; justify-content: center; align-items: center;
+             font-size: 2em; /* Slightly smaller */
+             text-align: center; z-index: 10; border-radius: 5px;
+             box-sizing: border-box; padding: 20px;
+        }
+        .initial-wait-overlay .overlay-title, .halftime-overlay .overlay-title, .fulltime-overlay .overlay-title { font-size: 1em; margin-bottom: 10px; }
+        .initial-wait-overlay .overlay-details, .halftime-overlay .overlay-details, .fulltime-overlay .overlay-details { font-size: 0.8em; margin-bottom: 20px; font-weight: normal; }
+        .initial-wait-overlay span, .halftime-overlay span, .fulltime-overlay span { font-size: 0.7em; margin-top: 15px; font-weight: normal; }
 
 
         /* Sidebar Components */
@@ -39,66 +108,49 @@
         #teamListEl li { margin-bottom: 3px;}
 
          /* Leaderboard Styles */
-         #leaderboardHeader { margin-top: 20px; /* Space above leaderboard */ }
-         .leaderboard-list {
-              list-style: decimal;
-              padding-left: 25px; /* Indent numbers */
-              margin-bottom: 15px;
-              font-size: 0.9em;
-              max-height: 150px; /* Limit height */
-              overflow-y: auto;   /* Add scroll if needed */
-              border: 1px solid #eee;
-              padding-top: 5px;
-              padding-bottom: 5px;
-              border-radius: 4px;
-         }
-         .leaderboard-list li {
-              margin-bottom: 5px;
-              padding-right: 5px; /* Prevent text touching edge */
-              display: flex;       /* Use flex for alignment */
-              justify-content: space-between; /* Push balance to the right */
-         }
-         .leaderboard-list .leaderboard-balance {
-              font-weight: bold;
-              color: #007bff; /* Make balance stand out */
-              margin-left: 10px; /* Space between name and balance */
-         }
-         .leaderboard-list .no-entries {
-             font-style: italic;
-             color: #888;
-             list-style: none; /* Remove number for this message */
-         }
+         #leaderboardHeader { margin-top: 20px; }
+         .leaderboard-list { list-style: decimal; padding-left: 25px; margin-bottom: 15px; font-size: 0.9em; max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding-top: 5px; padding-bottom: 5px; border-radius: 4px; }
+         .leaderboard-list li { margin-bottom: 5px; padding-right: 5px; display: flex; justify-content: space-between; }
+         .leaderboard-list .leaderboard-balance { font-weight: bold; color: #007bff; margin-left: 10px; }
+         .leaderboard-list .no-entries { font-style: italic; color: #888; list-style: none; }
 
         #gameStatusMessageEl { text-align: center; margin-top: auto; font-style: italic; padding-top: 15px; border-top: 1px solid #eee; font-size: 0.9em; color: #555; }
 
         /* Chat/Betting Area */
-        .chat-container { flex-grow: 2; background-color: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; min-width: 300px; }
-        .chat-box { flex-grow: 1; border: 1px solid #ccc; margin-bottom: 5px; padding: 8px; overflow-y: scroll; font-size: 0.9em; background-color: #f9f9f9; height: 60px; line-height: 1.4; }
+        .chat-container { flex-grow: 2; background-color: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; min-width: 280px; /* Reduced min-width */ }
+        .chat-box {
+            flex-grow: 1; /* Let it take available space */
+            border: 1px solid #ccc; margin-bottom: 5px; padding: 8px; overflow-y: scroll;
+            font-size: 0.9em; background-color: #f9f9f9;
+            /* Removed fixed height */
+             line-height: 1.4;
+             min-height: 80px; /* << Ensure minimum chat lines visible */
+        }
         .chat-box div { margin-bottom: 4px; word-wrap: break-word; }
-        .chat-box strong { color: #0056b3; } /* Make sender name stand out */
-        .chat-input { display: flex; }
+        .chat-box strong { color: #0056b3; }
+        .chat-input { display: flex; flex-shrink: 0; /* Prevent shrinking */ }
         .chat-input input { flex-grow: 1; padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9em; }
         .chat-input button { padding: 6px 12px; margin-left: 5px; cursor: pointer; border: none; background-color: #4CAF50; color: white; border-radius: 3px; transition: background-color 0.2s; }
         .chat-input button:hover:not(:disabled) { background-color: #45a049; }
 
-        .betting-container { flex-grow: 1; background-color: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; min-width: 280px; }
-        .balance { text-align: center; font-weight: bold; margin-bottom: 5px; font-size: 1.1em; }
-        .betting-controls { display: flex; flex-direction: column; gap: 6px; }
-        .bet-options { display: flex; justify-content: space-around; font-size: 0.95em; margin-bottom: 5px; flex-wrap: wrap; /* Allow wrapping if needed */ row-gap: 3px;}
-        .bet-options div { min-width: 70px; text-align: center;} /* Ensure minimum width for each option */
+        .betting-container { flex-grow: 1; background-color: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; min-width: 260px; /* Reduced min-width */ }
+        .balance { text-align: center; font-weight: bold; margin-bottom: 5px; font-size: 1.1em; flex-shrink: 0; }
+        .betting-controls { display: flex; flex-direction: column; gap: 6px; flex-grow: 1; justify-content: center; /* Center vertically */ }
+        .bet-options { display: flex; justify-content: space-around; font-size: 0.9em; /* Slightly smaller */ margin-bottom: 5px; flex-wrap: wrap; row-gap: 3px; }
+        .bet-options div { min-width: 65px; text-align: center;}
         .bet-team { font-weight: bold; }
         .bet-odds { color: #007bff; font-weight: bold; }
         .bet-input-area { display: flex; gap: 5px; }
-        .bet-input-area input { width: 60px; padding: 5px; border: 1px solid #ccc; border-radius: 3px; text-align: right; }
-        .bet-input-area button { padding: 5px 8px; cursor: pointer; border: none; color: white; border-radius: 3px; font-size: 0.85em; flex-grow: 1; transition: background-color 0.2s; }
+        .bet-input-area input { width: 55px; /* Smaller input */ padding: 5px; border: 1px solid #ccc; border-radius: 3px; text-align: right; }
+        .bet-input-area button { padding: 5px 6px; /* Adjust padding */ cursor: pointer; border: none; color: white; border-radius: 3px; font-size: 0.8em; /* Smaller font */ flex-grow: 1; transition: background-color 0.2s; }
         .bet-button-a { background-color: #2196F3; }
         .bet-button-a:hover:not(:disabled) { background-color: #1e88e5; }
-        .bet-button-d { background-color: #ff9800; } /* Orange for Draw */
+        .bet-button-d { background-color: #ff9800; }
         .bet-button-d:hover:not(:disabled) { background-color: #fb8c00; }
         .bet-button-b { background-color: #f44336; }
         .bet-button-b:hover:not(:disabled) { background-color: #e53935; }
         button:disabled { background-color: #ccc !important; cursor: not-allowed !important; color: #666 !important; }
-        .bet-message { font-size: 0.85em; color: green; text-align: center; min-height: 1.3em; margin-top: 5px; font-weight: bold; }
+        .bet-message { font-size: 0.85em; color: green; text-align: center; min-height: 1.3em; margin-top: 5px; font-weight: bold; flex-shrink: 0; }
         .bet-error { color: red; }
 
         /* Nickname Modal */
@@ -109,10 +161,95 @@
         .modal-content button { padding: 10px 25px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 1em; transition: background-color 0.2s; }
         .modal-content button:hover { background-color: #45a049; }
 
-        /* Connection Status */
-        #connectionStatus { position: fixed; top: 0; left: 0; width: 100%; background-color: #ffc107; color: #333; padding: 4px 0; text-align: center; font-size: 0.85em; z-index: 1001; transition: background-color 0.5s ease, color 0.5s ease; }
-        #connectionStatus.connected { background-color: #28a745; color: white; }
-        #connectionStatus.error { background-color: #dc3545; color: white; }
+
+        /* --- MOBILE STYLES --- */
+        @media (max-width: 800px) {
+            body {
+                padding-top: 35px; /* More space for potentially taller status bar */
+                 /* Allow body scroll on mobile */
+                 min-height: 100vh; /* Use min-height instead of height */
+                 height: auto;
+            }
+            .container {
+                flex-direction: column; /* Stack game and sidebar */
+                height: auto; /* Allow height to grow */
+                width: 100%;
+                padding: 0 5px; /* Add slight horizontal padding */
+            }
+            .game-area {
+                min-width: unset; /* Remove min-width */
+                width: 100%;
+                min-height: unset; /* Remove min height */
+                height: auto; /* Allow shrinking/growing */
+                margin-bottom: 10px; /* Space below game area */
+                order: 1; /* Game area first */
+            }
+            .sidebar {
+                min-width: unset; /* Remove min-width */
+                max-width: unset; /* Remove max-width */
+                width: 100%;
+                height: auto; /* Allow height based on content */
+                max-height: 40vh; /* Limit sidebar height */
+                order: 2; /* Sidebar second */
+                margin-bottom: 10px; /* Space below sidebar */
+            }
+             #teamListEl, .leaderboard-list {
+                 max-height: 120px; /* Reduce list height */
+             }
+
+            #gameCanvas {
+                 height: 300px; /* Give canvas a fixed height */
+                 min-height: unset;
+                 flex-grow: 0; /* Don't let canvas grow */
+            }
+             /* Adjust overlay for fixed canvas height */
+            .halftime-overlay, .fulltime-overlay, .initial-wait-overlay {
+                top: 70px; /* Below match info */
+                bottom: auto; /* Don't pin to bottom */
+                height: 300px; /* Match canvas height */
+                font-size: 1.8em; /* Smaller font */
+            }
+
+            .chat-betting-area {
+                flex-direction: column; /* Stack chat and betting */
+                height: auto; /* Let content define height */
+                width: 100%;
+                padding: 0 5px; /* Add slight horizontal padding */
+            }
+            .chat-container {
+                min-width: unset; /* Remove min-width */
+                width: 100%;
+                margin-bottom: 10px; /* Space below chat */
+                height: 150px; /* Give chat a decent fixed height */
+                order: 3; /* Chat third */
+            }
+            .betting-container {
+                min-width: unset; /* Remove min-width */
+                width: 100%;
+                height: auto; /* Adjust height automatically */
+                min-height: 130px; /* Ensure enough space for controls */
+                order: 4; /* Betting last */
+                 margin-bottom: 10px;
+            }
+             .bet-input-area button {
+                 font-size: 0.8em; /* Even smaller font on mobile buttons */
+             }
+        }
+
+        @media (max-width: 400px) {
+             .match-info { font-size: 0.9em; padding: 8px 0;}
+             .score { font-size: 1.1em; padding: 0 8px;}
+             .game-time { font-size: 0.9em; min-width: 50px;}
+             .team-name { min-width: 60px; padding: 0 3px;}
+              .bet-options { font-size: 0.8em; }
+              .bet-input-area input { width: 45px; }
+              .bet-input-area button { padding: 5px 4px; }
+               #gameCanvas { height: 250px; }
+               .halftime-overlay, .fulltime-overlay, .initial-wait-overlay { height: 250px; font-size: 1.5em;}
+
+        }
+
+
     </style>
 </head>
 <body>
